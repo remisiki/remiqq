@@ -1,0 +1,17 @@
+{
+  "name": "remiqq",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "remisiki",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "jquery": "^3.6.0",
+    "jsdom": "^19.0.0",
+    "oicq": "^2.2.1",
+    "readline": "^1.3.0"
+  },
+  "scripts": {
+    "start": "electron ."
+  }
+}
