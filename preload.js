@@ -1,12 +1,13 @@
 const { contextBridge, ipcRenderer, BrowserWindow } = require('electron');
 
-const { receiveMessage, clearMessage } = require("./src/message");
+const { addNewMessage, clearMessage } = require("./src/message");
+const { addNewChat, addMyAvatar } = require("./src/chat");
 
 
 contextBridge.exposeInMainWorld('api', {
     setTitle: (title) => ipcRenderer.send('set-title', title),
-    setNewMessage: (msg) => {
-      receiveMessage(msg);
+    setNewMessage: (msg, name, time, from_me, avatar_url) => {
+      addNewMessage(msg, name, time, from_me, avatar_url);
     },
     alertMessage: (msg) => alert(msg),
     getValue: (query) => {
@@ -18,15 +19,23 @@ contextBridge.exposeInMainWorld('api', {
     clearMessage: () => {
       clearMessage();
     },
+    addNewChat: (id, name, last, avatar_url) => {
+      addNewChat(id, name, last, avatar_url, () => ipcRenderer.send('sync-message', id));
+    },
+    getMyAvatar: (url) => {
+      addMyAvatar(url);
+    },
 })
 
 window.addEventListener('DOMContentLoaded', () => {
-  const replaceText = (selector, text) => {
-    const element = document.getElementById(selector)
-    if (element) element.innerText = text
-  }
+  ipcRenderer.send('set-name');
+  ipcRenderer.send('set-avatar');
+  // const replaceText = (selector, text) => {
+  //   const element = document.getElementById(selector)
+  //   if (element) element.innerText = text
+  // }
 
-  for (const type of ['chrome', 'node', 'electron']) {
-    replaceText(`${type}-version`, process.versions[type])
-  }
+  // for (const type of ['chrome', 'node', 'electron']) {
+  //   replaceText(`${type}-version`, process.versions[type])
+  // }
 })

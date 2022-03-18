@@ -3,18 +3,19 @@
   <head>
     <meta charset="UTF-8">
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">
-    <meta http-equiv="X-Content-Security-Policy" content="default-src 'self'; script-src 'self'">
-    <title>Hello World!</title>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'">
+    <meta http-equiv="X-Content-Security-Policy" content="script-src 'self'">
+    <title>Remi QQ</title>
+    <link rel="stylesheet" href="./assets/index.css">
   </head>
   <body>
-    <h1 id="h11">Hello World!</h1>
-    We are using Node.js <span id="node-version"></span>,
-    Chromium <span id="chrome-version"></span>,
-    and Electron <span id="electron-version"></span>.
-    <div id="msg-box">
+    <div id="chat-list">
+      <div id="list-head"></div>
     </div>
-    <input id="send-box"/>
+    <div id="chat-head"></div>
+    <div id="msg-box" class="non-scroll">
+    </div>
+    <textarea id="send-box" class="non-scroll" autofocus="true"></textarea>
     <button id="send-btn" type="button">Send</button>
     <script src="init.js"></script>
   </body>

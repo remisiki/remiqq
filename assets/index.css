@@ -1,0 +1,185 @@
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c');
+
+html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,sub,sup,tt,var,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td {
+	font-size: 18px;
+	color: #eee;
+    line-height: 1.5;
+    font-family: "M PLUS Rounded 1c", sans-serif;
+}
+
+div {
+	scroll-behavior: smooth;
+}
+
+body {
+    background-color: #0e1621;
+}
+
+textarea {
+	font-family: inherit;
+	font-size: inherit;
+	line-height: inherit;
+	position: fixed;
+	bottom: 1vh;
+	left: 20vw;
+	height: 5vh;
+	width: 60vw;
+	padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    box-shadow: 1px 1px 1px #999;
+    resize: none;
+}
+
+button {
+	font-family: inherit;
+	font-size: inherit;
+	line-height: inherit;
+	text-align: center;
+}
+
+img {
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+}
+
+:link {
+    -webkit-user-drag: none;
+}
+
+.me {
+
+}
+
+.non-scroll::-webkit-scrollbar {
+	display: none;
+}
+
+.msg-name, .msg-name-me {
+	float: left;
+	font-size: inherit;
+}
+
+.msg-name-me {
+	float: right;
+}
+
+.msg-time {
+	float: right;
+	margin-left: 50px;
+	font-size: 80%;
+	color: #808080;
+	margin-top: 0.5em;
+    margin-left: 1em;
+}
+
+.msg, .msg-me {
+	background-color: #182533;
+    width: max-content;
+	max-width: 60%;
+    border-radius: 5px 20px 20px 5px;
+    border: 1px solid #333;
+    overflow-wrap: break-word;
+    padding: 10px;
+    margin-bottom: 5px;
+    float: left;
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+.msg-me {
+	background-color: #2b5278;
+	float: right;
+	border-radius: 20px 5px 5px 20px;
+}
+
+.msg-title {
+	display: block;
+	overflow: hidden;
+	font-size: 90%;
+}
+
+.avatar, .avatar-me {
+	border-radius: 50%;
+	display: inline-block;
+	float: left;
+}
+
+.avatar-me {
+	float: right;
+}
+
+#msg-box .avatar {
+	margin-left: 10px;
+}
+
+#msg-box .avatar-me {
+	margin-right: 10px;
+}
+
+.chat-container {
+	padding: 10px;
+	transition: all 0.2s ease;
+	height: 40px;
+}
+
+.chat-container:hover:not(.chat-container-selected) {
+	background-color: #0e1621;
+}
+
+.chat-container-selected {
+	background-color: #2b5278;
+}
+
+.chat {
+	word-break: keep-all;
+	margin-left: 50px;
+    overflow-wrap: normal;
+    user-select: none;
+    overflow-x: hidden;
+}
+
+#list-head {
+	background-color: #17212b;
+	height: 40px;
+	padding: 10px;
+	border-right: 1px solid #0e1621;
+	border-bottom: 1px solid #0e1621;
+}
+
+#chat-head {
+	background-color: #17212b;
+	padding: 10px;
+	height: 40px;
+	width: 80vw;
+	position: fixed;
+	left: 20vw;
+	top: 0;
+}
+
+#chat-list {
+	position: fixed;
+	left: 0;
+	top: 0;
+	height: 100vh;
+	width: 20vw;
+	overflow-wrap: break-word;
+	background-color: #17212b;
+	border-right: 1px solid #0e1621;
+}
+
+#msg-box {
+	margin-top: 10px;
+	position: fixed;
+	right: 0;
+	top: 60px;
+	height: 80vh;
+	width: 80vw;
+	overflow-y: scroll;
+}
+
+#send-btn {
+	position: fixed;
+	bottom: 1vh;
+	right: 1vw;
+}

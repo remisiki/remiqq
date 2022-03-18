@@ -1,4 +1,4 @@
-const { contextBridge, ipcMain, BrowserWindow } = require('electron');
+const { BrowserWindow } = require('electron');
 
 function runJS(code) {
 	const mainWindow = BrowserWindow.getAllWindows()[0];
