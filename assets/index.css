@@ -43,6 +43,18 @@ img {
     -webkit-user-drag: none;
 }
 
+.msg img, .msg-me img {
+	max-height: 50vh;
+    max-width: 100%;
+    border-radius: 5px;
+}
+
+#send-box img {
+	max-height: 10vh;
+	max-width: 20vw;
+	border-radius: 5px;
+}
+
 :link {
     -webkit-user-drag: none;
 }
@@ -140,11 +152,16 @@ img {
 }
 
 #list-head {
+	position: fixed;
+	top: 0;
+	left: 0;
 	background-color: #17212b;
 	height: 40px;
+	width: calc(20vw - 20px);
 	padding: 10px;
 	border-right: 1px solid #0e1621;
 	border-bottom: 1px solid #0e1621;
+	z-index: 1;
 }
 
 #chat-head {
@@ -160,26 +177,59 @@ img {
 #chat-list {
 	position: fixed;
 	left: 0;
-	top: 0;
-	height: 100vh;
+	top: 60px;
+	height: calc(100vh - 60px);
 	width: 20vw;
 	overflow-wrap: break-word;
 	background-color: #17212b;
 	border-right: 1px solid #0e1621;
+	border-top: 1px solid #0e1621;
+	overflow-y: scroll;
+	z-index: 1;
 }
 
 #msg-box {
-	margin-top: 10px;
 	position: fixed;
 	right: 0;
 	top: 60px;
-	height: 80vh;
+	height: calc(100vh - 125px);
 	width: 80vw;
 	overflow-y: scroll;
 }
 
-#send-btn {
+#bottom-area {
 	position: fixed;
+	left: 20vw;
+	bottom: 0;
+	height: 65px;
+	width: 80vw;
+    background-color: #17212b;
+}
+
+#send-box {
+    background-color: #111111;
+	position: absolute;
+	top: 2.5px;
+    height: 40px;
+    width: calc(80vw - 160px);
+    padding: 10px;
+    border-radius: 10px;
+    overflow-y: auto;
+    margin-left: 10px;
+}
+
+#send-btn {
+	position: absolute;
 	bottom: 1vh;
 	right: 1vw;
+}
+
+[contenteditable]:focus {
+    outline: 0px solid transparent;
+}
+
+.gap {
+	width: 100%;
+    height: 5px;
+    clear: both;
 }

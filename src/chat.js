@@ -1,6 +1,6 @@
 const { runJS } = require("./window");
 const { Client } = require("oicq");
-const { User } = require("oicq");
+const { User, Group } = require("oicq");
 
 
 function addNewChat(id, name, last, avatar_url, callback) {
@@ -27,18 +27,31 @@ function addNewChat(id, name, last, avatar_url, callback) {
 exports.addNewChat = addNewChat;
 
 Client.prototype.addChatList = function (chats) {
+	let chat_list = [];
 	for (const chat of chats) {
 		const id = chat.id;
 		const name = chat.name;
 		const last = chat.last;
-		const avatar_url = this.getAvatar(id);
-		runJS(`window.api.addNewChat(${id}, "${name}", ${last}, "${avatar_url}");`);
+		const is_group = (chat.type === 1);
+		const avatar_url = this.getAvatar(id, is_group);
+		runJS(`window.api.addNewChat(${id}, "${name}", ${last}, ${is_group}, "${avatar_url}");`);
+		chat_list.push({
+			id: id,
+			group: is_group
+		});
 	}
+	return chat_list;
 }
 
-Client.prototype.getAvatar = function (id = this.uin) {
-	const user = new User(this, id);
-	return user.getAvatarUrl(40);
+Client.prototype.getAvatar = function (id = this.uin, group = false) {
+	if (group) {
+		const group = new Group(this, id);
+		return group.getAvatarUrl(40);
+	}
+	else {
+		const user = new User(this, id);
+		return user.getAvatarUrl(40);
+	}
 }
 
 function addMyAvatar(url) {

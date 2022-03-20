@@ -6,21 +6,21 @@ const { addNewChat, addMyAvatar } = require("./src/chat");
 
 contextBridge.exposeInMainWorld('api', {
     setTitle: (title) => ipcRenderer.send('set-title', title),
-    setNewMessage: (msg, name, time, from_me, avatar_url) => {
-      addNewMessage(msg, name, time, from_me, avatar_url);
+    setNewMessage: (doms, name, time, from_me, avatar_url, img_urls, img_only) => {
+      addNewMessage(JSON.parse(doms), name, time, from_me, avatar_url, img_urls, img_only);
     },
     alertMessage: (msg) => alert(msg),
     getValue: (query) => {
       return document.querySelector(query).innerText;
     },
     sendMessage: () => {
-      ipcRenderer.send('send-message', [document.querySelector("#send-box").value, 2635799987]);
+      ipcRenderer.send('send-message', [document.querySelector("#send-box").innerHTML, 2871789759]);
     },
     clearMessage: () => {
       clearMessage();
     },
-    addNewChat: (id, name, last, avatar_url) => {
-      addNewChat(id, name, last, avatar_url, () => ipcRenderer.send('sync-message', id));
+    addNewChat: (id, name, last, group, avatar_url) => {
+      addNewChat(id, name, last, avatar_url, () => ipcRenderer.send('sync-message', [id, group]));
     },
     getMyAvatar: (url) => {
       addMyAvatar(url);

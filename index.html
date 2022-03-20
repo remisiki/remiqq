@@ -9,14 +9,17 @@
     <link rel="stylesheet" href="./assets/index.css">
   </head>
   <body>
-    <div id="chat-list">
-      <div id="list-head"></div>
+    <div id="list-head"></div>
+    <div id="chat-list" class="non-scroll">
     </div>
     <div id="chat-head"></div>
     <div id="msg-box" class="non-scroll">
     </div>
-    <textarea id="send-box" class="non-scroll" autofocus="true"></textarea>
-    <button id="send-btn" type="button">Send</button>
+    <!-- <textarea id="send-box" class="non-scroll" autofocus="true"></textarea> -->
+    <div id="bottom-area">
+      <div id="send-box" class="non-scroll" autofocus="true" contenteditable="true"></div>
+      <button id="send-btn" type="button">Send</button>
+    </div>
     <script src="init.js"></script>
   </body>
 </html>

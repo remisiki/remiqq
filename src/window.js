@@ -1,7 +1,13 @@
 const { BrowserWindow } = require('electron');
 
 function runJS(code) {
-	const mainWindow = BrowserWindow.getAllWindows()[0];
-	mainWindow.webContents.executeJavaScript(code);
+	try {
+		const mainWindow = BrowserWindow.getAllWindows()[0];
+	// mainWindow.webContents.executeJavaScript(code);
+		mainWindow.webContents.executeJavaScript(String.raw`${code.replace(/\n/g, "<br>")}`);
+	}
+	catch (e) {
+		console.error(e);
+	}
 }
 exports.runJS = runJS;
