@@ -2,7 +2,7 @@ const { User, Group } = require("oicq");
 const { segment } = require("oicq/lib/message/elements");
 const { Client } = require("oicq");
 const { runJS } = require("./window");
-const { getTime } = require("./utils");
+const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces } = require("./utils");
 const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromSegment } = require("./image");
 const jsdom = require("jsdom");
 
@@ -35,7 +35,8 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 		switch (dom.type) {
 			case "text":
 				const msg_text = document.createElement("div");
-				msg_text.innerText = dom.text;
+				msg_text.innerText = unescapeHtml(dom.text);
+				msg_text.innerHTML = msg_text.innerHTML.replace(/<br>/g, '\u000a');
 				msg_container.appendChild(msg_text);
 				break;
 			case "image":
@@ -84,20 +85,30 @@ function clearMessage() {
 exports.clearMessage = clearMessage;
 
 Client.prototype.sendMessage = async function (html, id) {
+	if (!html) return;
 	const user = new User(this, id);
 	const doms = splitDomByImg(html);
 	const send_list = doms.map(dom => {
+		dom = removeSpaces(dom);
 		if (domIsImg(dom)) {
-			return segment.image(getBase64FromImg(dom));
+			try {
+				const sendable_img = getBase64FromImg(dom);
+				return segment.image(sendable_img);
+			}
+			catch (e) {
+				return segment.text(dom);
+			}
 		}
 		else {
 			return segment.text(dom);
 		}
 	});
-	const msg_callback = await user.sendMsg(send_list);
+	const unescaped_send_list = unescapeHtmlFromDom(send_list);
+	const escaped_send_list = escapeHtmlFromDom(send_list);
+	const msg_callback = await user.sendMsg(unescaped_send_list);
 	const time = getTime(msg_callback.time);
 	const avatar_url = this.getAvatar();
-	runJS(`window.api.setNewMessage(String.raw\`${JSON.stringify(send_list)}\`, "${this.nickname}", "${time}", true, "${avatar_url}");`);
+	runJS(`window.api.setNewMessage(String.raw\`${JSON.stringify(escaped_send_list)}\`, "${this.nickname}", "${time}", true, "${avatar_url}");`);
 }
 
 Client.prototype.getHistoryById = async function (id, group) {
@@ -134,7 +145,8 @@ Client.prototype.syncMessage = async function (id, group) {
 		const img_urls = img_urls_result.img_urls;
 		const img_only = img_urls_result.img_only;
 		const doms = history.msgs[i].message;
-		runJS(`window.api.setNewMessage(String.raw\`${JSON.stringify(doms)}\`, "${name}", "${time}", ${from_me}, "${avatar_url}", ${JSON.stringify(img_urls)}, ${img_only});`);
+		const escaped_doms = escapeHtmlFromDom(doms);
+		runJS(`window.api.setNewMessage(String.raw\`${JSON.stringify(escaped_doms)}\`, "${name}", "${time}", ${from_me}, "${avatar_url}", ${JSON.stringify(img_urls)}, ${img_only});`);
 	}
 }
 

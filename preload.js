@@ -14,7 +14,9 @@ contextBridge.exposeInMainWorld('api', {
       return document.querySelector(query).innerText;
     },
     sendMessage: () => {
-      ipcRenderer.send('send-message', [document.querySelector("#send-box").innerHTML, 2871789759]);
+      const send_box = document.getElementById("send-box");
+      ipcRenderer.send('send-message', [send_box.innerHTML, 2871789759]);
+      send_box.innerHTML = "";
     },
     clearMessage: () => {
       clearMessage();

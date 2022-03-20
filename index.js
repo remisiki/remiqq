@@ -5,7 +5,7 @@ require('dotenv').config();
 require("./src/chat");
 
 const { sendMessage, getHistory } = require("./src/message");
-const { getTime } = require("./src/utils");
+const { getTime, escapeHtmlFromDom } = require("./src/utils");
 const { extractUrlFromMessage } = require("./src/image");
 const { contextBridge, ipcMain, BrowserWindow } = require('electron');
 const { createClient, User } = require("oicq");
@@ -54,8 +54,9 @@ if (require.main === module) {
 			const img_urls_result = extractUrlFromMessage(e);
 			const img_urls = img_urls_result.img_urls;
 			const img_only = img_urls_result.img_only;
+			const escaped_doms = escapeHtmlFromDom(e.message);
 			if (current_uid === sender_id) {
-				runJS(`window.api.setNewMessage(String.raw\`${JSON.stringify(e.message)}\`, "${name}", "${time}", ${from_me}, "${avatar_url}", ${JSON.stringify(img_urls)}, ${img_only});`);
+				runJS(`window.api.setNewMessage(String.raw\`${JSON.stringify(escaped_doms)}\`, "${name}", "${time}", ${from_me}, "${avatar_url}", ${JSON.stringify(img_urls)}, ${img_only});`);
 			}
 			const search_item = {id: sender_id, group: false};
 			if (!chat_list.some(item => JSON.stringify(item) == JSON.stringify(search_item))) {
@@ -83,8 +84,9 @@ if (require.main === module) {
 			const img_urls_result = extractUrlFromMessage(e);
 			const img_urls = img_urls_result.img_urls;
 			const img_only = img_urls_result.img_only;
+			const escaped_doms = escapeHtmlFromDom(e.message);
 			if (current_uid === group_id) {
-				runJS(`window.api.setNewMessage(String.raw\`${JSOn.stringify(e.message)}\`, "${name}", "${time}", ${from_me}, "${avatar_url}", ${JSON.stringify(img_urls)}, ${img_only});`);
+				runJS(`window.api.setNewMessage(String.raw\`${JSOn.stringify(escaped_doms)}\`, "${name}", "${time}", ${from_me}, "${avatar_url}", ${JSON.stringify(img_urls)}, ${img_only});`);
 			}
 			const search_item = {id: group_id, group: true};
 			if (!chat_list.some(item => JSON.stringify(item) == JSON.stringify(search_item))) {

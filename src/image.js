@@ -26,7 +26,7 @@ function extractUrlFromMessage(msg) {
 exports.extractUrlFromMessage = extractUrlFromMessage;
 
 function splitDomByImg(dom) {
-	return String.raw`${dom}`.split(IMG_REGEX);
+	return String.raw`${dom}`.split(IMG_REGEX).filter(x => x);
 }
 exports.splitDomByImg = splitDomByImg;
 
