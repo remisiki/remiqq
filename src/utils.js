@@ -5,23 +5,36 @@ function preTime(time) {
 }
 
 function getTime(timestamp, short = true) {
+	if (timestamp === 0) {
+		return null;
+	}
 	const date = new Date(timestamp * 1000);
 	if (short) {
 		return `${preTime(date.getHours())}:${preTime(date.getMinutes())}`;
 	}
 	else {
-		return `${date.getFullYear()}-${preTime(date.getMonth())}-${preTime(date.getDate())} ${preTime(date.getHours())}:${preTime(date.getMinutes())}:${preTime(date.getSeconds())}`;
+		return `${date.getFullYear()}-${preTime(date.getMonth() + 1)}-${preTime(date.getDate())} ${preTime(date.getHours())}:${preTime(date.getMinutes())}:${preTime(date.getSeconds())}`;
 	}
 }
 exports.getTime = getTime;
 
 function unescapeHtml(html) {
-	return html.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#36;/g, '$').replace(/&#96;/g, '`');
+	if (html) {
+		return html.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#36;/g, '$').replace(/&#96;/g, '`').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+	}
+	else {
+		return null;
+	}
 }
 exports.unescapeHtml = unescapeHtml;
 
 function escapeHtml(html) {
-	return html.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\$/g, '&#36;').replace(/`/g, '&#96;');
+	if (html) {
+		return html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\$/g, '&#36;').replace(/`/g, '&#96;').replace(/"/g, '&quot;');
+	}
+	else {
+		return null;
+	}
 }
 exports.escapeHtml = escapeHtml;
 
@@ -50,6 +63,41 @@ function unescapeHtmlFromDom(doms) {
 exports.unescapeHtmlFromDom = unescapeHtmlFromDom;
 
 function removeSpaces(html) {
-	return html.replace(/&nbsp;/g, ' ').replace(/<br>/g, '');
+	if (html) {
+		return html.replace(/&nbsp;/g, ' ').replace(/<br>/g, '');
+	}
+	else {
+		return null;
+	}
 }
 exports.removeSpaces = removeSpaces;
+
+function removeNewLines(str) {
+	if (str) {
+		return str.replace(/\r/g, "").replace(/\n/g, " ");
+	}
+	else {
+		return null;
+	}
+}
+exports.removeNewLines = removeNewLines;
+
+function compareChat(a, b) {
+	return (a.id === b.id) && (a.group === b.group);
+}
+exports.compareChat = compareChat;
+
+function getRawMessage(msg) {
+	return msg.map((segment) => {
+		const msg_type = segment.type;
+		switch (msg_type) {
+			case "text":
+				return removeNewLines(segment.text);
+			case "image":
+				return "[Image]";
+			default:
+				return `[${msg_type} not supported]`;
+		}
+	}).reduce((a, b) => (a + b));
+}
+exports.getRawMessage = getRawMessage;

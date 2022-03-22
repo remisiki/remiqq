@@ -1,12 +1,13 @@
 const IMG_REGEX = /(<img.*?>)/g;
-exports.IMG_REGEX = IMG_REGEX;
 const BASE64_REGEX = /.*base64,(.*)/g;
-exports.BASE64_REGEX = BASE64_REGEX;
 const SRC_REGEX = /src="(.*?)"/g;
-exports.SRC_REGEX = SRC_REGEX;
 const IS_HTTP_S = /(^https?:\/\/.*)/g;
-const IS_BASE64 = /^base64:\/\/(.*)/g;
+const IS_BASE64 = /^data:image\/png;base64,(.*)/g;
+const IS_SENDABLE_BASE64 = /^base64:\/\/(.*)/g;
 const BASE64_PREFIX = "data:image/png;base64,";
+const BASE64_SENDABLE_PREFIX = "base64://";
+
+const { unescapeHtml } = require("./utils");
 
 function extractUrlFromMessage(msg) {
 	let img_urls = [];
@@ -26,7 +27,7 @@ function extractUrlFromMessage(msg) {
 exports.extractUrlFromMessage = extractUrlFromMessage;
 
 function splitDomByImg(dom) {
-	return String.raw`${dom}`.split(IMG_REGEX).filter(x => x);
+	return dom.split(IMG_REGEX).filter(x => x);
 }
 exports.splitDomByImg = splitDomByImg;
 
@@ -48,10 +49,10 @@ exports.domIsImg = domIsImg;
 function getImgSrcFromSegment(segment) {
 	const src = segment.url ?? segment.file;
 	const is_http_s = IS_HTTP_S.exec(src);
-	const is_base64 = IS_BASE64.exec(src);
+	const is_base64 = IS_SENDABLE_BASE64.exec(src);
 	// Reset regex pointers
 	IS_HTTP_S.exec("");
-	IS_BASE64.exec("");
+	IS_SENDABLE_BASE64.exec("");
 	if (is_http_s) {
 		return src;
 	}
@@ -64,3 +65,41 @@ function getImgSrcFromSegment(segment) {
 	}
 }
 exports.getImgSrcFromSegment = getImgSrcFromSegment;
+
+function getImgSrcFromDom(dom) {
+	let src = SRC_REGEX.exec(dom);
+	SRC_REGEX.exec("");
+	if (!src) {
+		throw new Error(`Image without source ${dom}.`);
+	}
+	src = src[1];
+	const is_http_s = IS_HTTP_S.exec(src);
+	const is_base64 = IS_BASE64.exec(src);
+	IS_HTTP_S.exec("");
+	IS_BASE64.exec("");
+	if (is_http_s) {
+		return `${unescapeHtml(src)}`;
+	}
+	else if (is_base64) {
+		return `${BASE64_SENDABLE_PREFIX}${unescapeHtml(is_base64[1])}`;
+	}
+	else {
+		throw new Error(`Invalid image source ${dom}.`);
+	}
+}
+exports.getImgSrcFromDom = getImgSrcFromDom;
+
+function isImgSrc(str) {
+	const is_http_s = IS_HTTP_S.exec(str);
+	const is_base64 = IS_BASE64.exec(str);
+	// Reset regex pointers
+	IS_HTTP_S.exec("");
+	IS_BASE64.exec("");
+	return (is_http_s || is_base64);
+}
+exports.isImgSrc = isImgSrc;
+
+function imgSrcToDom(src) {
+	return `<img src="${src}" />`;
+}
+exports.imgSrcToDom = imgSrcToDom;

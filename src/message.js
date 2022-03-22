@@ -1,10 +1,11 @@
 const { User, Group } = require("oicq");
 const { segment } = require("oicq/lib/message/elements");
 const { Client } = require("oicq");
-const { runJS } = require("./window");
-const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces } = require("./utils");
-const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromSegment } = require("./image");
+const { windowEmit } = require("./window");
+const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces, compareChat, getRawMessage, removeNewLines } = require("./utils");
+const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromDom, getImgSrcFromSegment } = require("./image");
 const jsdom = require("jsdom");
+const { updateChatListData } = require("./sqlite");
 
 const editText = (selector, text) => {
     const element = document.getElementById(selector);
@@ -13,7 +14,14 @@ const editText = (selector, text) => {
     }
 }
 
-function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, img_urls = [], img_only = false) {
+function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, no_scroll = false) {
+
+	const messageScroll = (msg) => {
+		const msg_box = document.getElementById("msg-box");
+		if (msg_box.scrollHeight - msg_box.scrollTop <= msg.clientHeight + msg_box.clientHeight + 20) {
+			msg_box.scrollTop = msg_box.scrollHeight;
+		}
+	}
 
 	const title = document.createElement("div");
 	title.className = "msg-title";
@@ -43,11 +51,22 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 				const msg_img = document.createElement("img");
 				msg_img.className = "msg-img";
 				msg_img.src = getImgSrcFromSegment(dom);
+				if (!no_scroll) {
+					msg_img.addEventListener("load", () => {
+						messageScroll(msg_container);
+					});
+				}
 				msg_container.appendChild(msg_img);
 				break;
 			default:
 				msg_container.innerHTML += (`[${dom.type} not supported]`);
 		}
+	}
+
+	let img_only = false;
+	if (doms.every(x => x.type === "image")) {
+		msg_container.className += " msg-transparent";
+		img_only = true;
 	}
 
 	msg_container.appendChild(title_time);
@@ -66,36 +85,48 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 
 	const msg_box = document.querySelector('#msg-box');
 	msg_box.removeChild(msg_box.lastChild);
+	// msg_box.removeChild(msg_box.firstChild);
 	msg_box.appendChild(msg_wrapper);
 	msg_box.appendChild(msg_gap_bottom);
-	msg_box.scrollTop = msg_box.scrollHeight;
+	// msg_box.insertBefore(msg_wrapper, msg_box.firstChild);
+	// msg_box.insertBefore(msg_gap_bottom, msg_box.firstChild);
+	if (!img_only && !no_scroll) {
+		messageScroll(msg_container);
+	}
+	
 }
 exports.addNewMessage = addNewMessage;
 
 function clearMessage() {
 	const msg_box = document.querySelector('#msg-box');
 	msg_box.innerHTML = "";
+	const before_start = document.createElement("div");
+	before_start.id = "before-start";
+	before_start.style.display = "none";
+	before_start.innerText = "Select a chat to start messaging";
 	const msg_gap_top_0 = document.createElement("div");
 	const msg_gap_top_1 = document.createElement("div");
 	msg_gap_top_0.className = "gap";
 	msg_gap_top_1.className = "gap";
+	msg_box.appendChild(before_start);
 	msg_box.appendChild(msg_gap_top_0);
 	msg_box.appendChild(msg_gap_top_1);
 }
 exports.clearMessage = clearMessage;
 
-Client.prototype.sendMessage = async function (html, id) {
+Client.prototype.sendMessage = async function (html, id, group, db) {
 	if (!html) return;
-	const user = new User(this, id);
+	const user = (group) ? (new Group(this, id)) : (new User(this, id));
 	const doms = splitDomByImg(html);
 	const send_list = doms.map(dom => {
 		dom = removeSpaces(dom);
 		if (domIsImg(dom)) {
 			try {
-				const sendable_img = getBase64FromImg(dom);
+				const sendable_img = getImgSrcFromDom(dom);
 				return segment.image(sendable_img);
 			}
 			catch (e) {
+				console.log(e);
 				return segment.text(dom);
 			}
 		}
@@ -104,11 +135,13 @@ Client.prototype.sendMessage = async function (html, id) {
 		}
 	});
 	const unescaped_send_list = unescapeHtmlFromDom(send_list);
-	const escaped_send_list = escapeHtmlFromDom(send_list);
 	const msg_callback = await user.sendMsg(unescaped_send_list);
 	const time = getTime(msg_callback.time);
 	const avatar_url = this.getAvatar();
-	runJS(`window.api.setNewMessage(String.raw\`${JSON.stringify(escaped_send_list)}\`, "${this.nickname}", "${time}", true, "${avatar_url}");`);
+	const raw_message = getRawMessage(send_list);
+	windowEmit('set-message', send_list, this.nickname, time, true, avatar_url);
+	windowEmit('update-chat', id, group, time, raw_message);
+	updateChatListData(db, id, group, "", msg_callback.time, raw_message);
 }
 
 Client.prototype.getHistoryById = async function (id, group) {
@@ -130,24 +163,27 @@ Client.prototype.getHistoryById = async function (id, group) {
 	};
 };
 
-Client.prototype.syncMessage = async function (id, group) {
+Client.prototype.syncMessage = async function (db, id, group) {
 	const history = await this.getHistoryById(id, group);
-	runJS(`window.api.clearMessage();`);
+	windowEmit('clear');
 	for (let i = 0; i < history.num; i ++) {
 		// console.log(history.msgs[i]);
-		const name = history.names[i];
-		const msg = history.msgs[i].raw_message;
-		const time = getTime(history.msgs[i].time);
-		const sender_id = (group) ? (history.msgs[i].sender.user_id) : (history.msgs[i].from_id);
+		const msg = history.msgs[i];
+		const sender_name = history.names[i];
+		const doms = msg.message;
+		const raw_message = removeNewLines(msg.raw_message);
+		const time = getTime(msg.time);
+		const sender_id = (group) ? (msg.sender.user_id) : (msg.from_id);
 		const from_me = (sender_id === this.uin);
 		const avatar_url = this.getAvatar(sender_id);
-		const img_urls_result = extractUrlFromMessage(history.msgs[i]);
-		const img_urls = img_urls_result.img_urls;
-		const img_only = img_urls_result.img_only;
-		const doms = history.msgs[i].message;
-		const escaped_doms = escapeHtmlFromDom(doms);
-		runJS(`window.api.setNewMessage(String.raw\`${JSON.stringify(escaped_doms)}\`, "${name}", "${time}", ${from_me}, "${avatar_url}", ${JSON.stringify(img_urls)}, ${img_only});`);
+		windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, true);
+		if (i === (history.num - 1)) {
+			const name = (group) ? null : await this.getName(id);
+			windowEmit('update-chat', id, group, time, raw_message);
+			updateChatListData(db, id, group, name ?? msg.group_name, msg.time, raw_message);
+		}
 	}
+	windowEmit('scroll-message');
 }
 
 Client.prototype.getMessageSenderName = async function (msg) {
@@ -175,3 +211,59 @@ Client.prototype.getMessageSenderName = async function (msg) {
 		return this.nickname;
 	}
 }
+
+Client.prototype.getName = async function (id) {
+	const user = new User(this, id);
+	const info = await user.getSimpleInfo();
+	return info.nickname;
+}
+
+Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
+	const msg_is_group = (e.message_type === "group");
+	const group_id = (msg_is_group) ? e.group_id : null;
+	const group_name = (msg_is_group) ? e.group_name : null;
+	const sender_id = (msg_is_group) ? e.sender.user_id : e.from_id;
+	const name = await this.getMessageSenderName(e);
+	const time = getTime(e.time);
+	const from_me = (sender_id === this.uin);
+	const avatar_url = this.getAvatar(sender_id);
+	const group_avatar_url = (msg_is_group) ? this.getAvatar(group_id, true) : null;
+	const escaped_doms = escapeHtmlFromDom(e.message);
+	if (current_uid === (group_id ?? sender_id)) {
+		windowEmit('set-message', e.message, name, time, from_me, avatar_url);
+	}
+	updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, escapeHtml(e.raw_message));
+	const search_item = {id: group_id ?? sender_id, group: msg_is_group};
+	if (!chat_list.some(item => compareChat(item, search_item))) {
+		windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, 0, e.raw_message, msg_is_group, group_avatar_url ?? avatar_url);
+		return search_item;
+	}
+	else if (chat_list) {
+		windowEmit('update-chat', group_id ?? sender_id, msg_is_group, time, e.raw_message);
+	}
+	return null;
+}
+
+Client.prototype.syncMessageFromOtherDevice = function(e, db, current_uid) {
+	const msg_is_group = (e.message_type === "group");
+	const receiver_id = e.to_id ?? null;
+	const group_id = (msg_is_group) ? e.group_id : null;
+	const time = getTime(e.time);
+	const group_name = (msg_is_group) ? e.group_name : null;
+	const name = this.nickname;
+	const avatar_url = this.getAvatar();
+	windowEmit('update-chat', group_id ?? receiver_id, msg_is_group, time, e.raw_message);
+	updateChatListData(db, group_id ?? receiver_id, msg_is_group, "", e.time, escapeHtml(e.raw_message));
+	if (current_uid !== (group_id ?? receiver_id)) {
+		return;
+	}
+	windowEmit('set-message', e.message, name, time, true, avatar_url);
+}
+
+function scrollMessageBoxToBottom() {
+	const msg_box = document.getElementById("msg-box");
+	msg_box.style.scrollBehavior = "unset";
+	msg_box.scrollTop = msg_box.scrollHeight;
+	msg_box.style.scrollBehavior = "smooth";
+}
+exports.scrollMessageBoxToBottom = scrollMessageBoxToBottom;

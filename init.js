@@ -1,4 +1,21 @@
-function handlepaste(e) {
+const IMG_REGEX = /(<img.*?>)/g;
+const BASE64_REGEX = /.*base64,(.*)/g;
+const SRC_REGEX = /src="(.*?)"/g;
+const IS_HTTP_S = /(^https?:\/\/.*)/g;
+const IS_BASE64 = /^base64:\/\/(.*)/g;
+const BASE64_PREFIX = "data:image/png;base64,";
+
+function htmlToPlainText(html) {
+	const pastedDom = new DOMParser().parseFromString(html, "text/html");
+	const doms = pastedDom.documentElement.getElementsByTagName("body")[0].children;
+	let plain_msg = "";
+	for (const dom of doms) {
+		plain_msg += `${dom.textContent}\n`;
+	}
+	return plain_msg;
+}
+
+function handlePaste(e) {
 	var types, pastedData, savedContent;
 
 	// Browsers that support the 'text/html' type in the Clipboard API (Chrome, Firefox 22+)
@@ -12,12 +29,7 @@ function handlepaste(e) {
 
 			// Extract data and pass it to callback
 			pastedData = e.clipboardData.getData('text/html');
-			const pastedDom = new DOMParser().parseFromString(pastedData, "text/html");
-			const doms = pastedDom.documentElement.getElementsByTagName("body")[0].children;
-			let plain_msg = "";
-			for (const dom of doms) {
-				plain_msg += `${dom.textContent}\n`;
-			}
+			const plain_msg = htmlToPlainText(pastedData);
 			insertTextAtCaret(plain_msg);
 
 			// Stop the data from actually being pasted
@@ -54,22 +66,42 @@ function insertTextAtCaret(text) {
     }
 }
 
+function handleDrop(e) {
+	e.preventDefault();
+	const content = e.dataTransfer.getData('text');
+	if (isImgSrc(content)) {
+		document.getElementById("send-box").innerHTML += imgSrcToDom(content);
+	}
+	else {
+		document.getElementById("send-box").innerHTML += escapeHtml(content);
+	}
+}
+
 function handleKey(e) {
 	if (e.keyCode == 13) {
 		if (e.ctrlKey) {
 			if (window.getSelection) {
-				const selection = window.getSelection(),
+				let selection = window.getSelection(),
 					range = selection.getRangeAt(0),
-					newline = document.createTextNode("\u000a");
+					newline = document.createTextNode("\u000d\u000a");
 					space = document.createTextNode("\u00a0");
+					// space = document.createTextNode("\u000d");
+				selection.modify("extend", "right", "line");
+				range = selection.getRangeAt(0);
+				// if (range.toString() == " ") {
+				// 	range.deleteContents();
+				// }
+
 				range.deleteContents();
 				range.insertNode(newline);
 				range.collapse(false);
 				range.insertNode(space);
-				range.selectNodeContents(space);
+				// range.selectNodeContents(space);
 
 				selection.removeAllRanges();
 				selection.addRange(range);
+				// selection.modify("move", "right", "line");
+				selection.modify("move", "left", "character");
 				return false;
 			}
 		}
@@ -85,7 +117,29 @@ function handleKey(e) {
 	}
 }
 
-document.getElementById("send-box").addEventListener('paste', handlepaste, false);
+function isImgSrc(str) {
+	const is_http_s = IS_HTTP_S.exec(str);
+	const is_base64 = IS_BASE64.exec(str);
+	// Reset regex pointers
+	IS_HTTP_S.exec("");
+	IS_BASE64.exec("");
+	return (is_http_s || is_base64);
+}
+
+function imgSrcToDom(src) {
+	return `<img src="${src}" />`;
+}
+
+function escapeHtml(html) {
+	return html.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\$/g, '&#36;').replace(/`/g, '&#96;');
+}
+
+document.getElementById("send-box").addEventListener('paste', handlePaste, false);
+document.getElementById("send-box").addEventListener('drop', handleDrop);
+document.getElementById("send-box").addEventListener('dragover', (e) => {
+	e.dataTransfer.setData('text', 'copy');
+	e.dataTransfer.effectAllowed = 'copy';
+});
 document.getElementById("send-box").onkeydown = (e) => handleKey(e);
 document.getElementById("send-btn").addEventListener("click",
 	() => window.api.sendMessage());

@@ -1,13 +1,12 @@
 const { BrowserWindow } = require('electron');
 
-function runJS(code) {
+function windowEmit(signal, ...data) {
 	try {
 		const mainWindow = BrowserWindow.getAllWindows()[0];
-	// mainWindow.webContents.executeJavaScript(code);
-		mainWindow.webContents.executeJavaScript(String.raw`${code.replace(/\n/g, "")}`);
+		mainWindow.webContents.send(signal, ...data);
 	}
 	catch (e) {
 		console.error(e);
 	}
 }
-exports.runJS = runJS;
+exports.windowEmit = windowEmit;
