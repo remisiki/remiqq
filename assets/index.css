@@ -59,6 +59,15 @@ img {
     -webkit-user-drag: none;
 }
 
+.link-text {
+	font-size: inherit;
+	color: #73b9f5;
+}
+
+.chat-container-selected .link-text {
+	color: #eee;
+}
+
 .me {
 
 }
@@ -101,6 +110,7 @@ img {
     border: 1px solid #333;
     overflow-wrap: break-word;
     padding: 10px;
+    margin-top: 5px;
     margin-bottom: 5px;
     float: left;
     margin-left: 10px;
@@ -167,11 +177,12 @@ img {
     user-select: none;
     overflow-x: hidden;
     white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .chat-last {
 	font-size: 80%;
-	max-width: 70%;
+	max-width: 75%;
 	word-break: keep-all;
 	margin-left: 50px;
     overflow-wrap: normal;
@@ -179,6 +190,29 @@ img {
     overflow-x: hidden;
     color: #808080;
     white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.chat-unread {
+	position: absolute;
+    right: 5px;
+    bottom: 7px;
+    background-color: #3e546a;
+    border-radius: 10px;
+    height: 20px;
+    width: max-content;
+    text-align: center;
+    font-size: 80%;
+    padding: 0 5px;
+}
+
+.chat-container-selected .chat-unread {
+	background-color: #7aa3ca;
+	color: #2b5278;
+}
+
+.chat-container-selected .chat-last, .chat-container-selected, .chat-time {
+	color: #eee;
 }
 
 #list-head {

@@ -60,12 +60,12 @@ if (require.main === module) {
 		try {
 			chat_list = chat_list.concat(
 				bot.addChatList(
-					await dbQueryResultSet(db, `select * from "private"`), 
-					false
-				), 
-				bot.addChatList(
-					await dbQueryResultSet(db, `select * from "group"`), 
-					true
+					await dbQueryResultSet(db, `
+							select "private".*, "private" as "src" from "private"
+							union all
+							select "group".*, "group" as "src" from "group"
+							order by "time" asc
+						`)
 				)
 			);
 		}

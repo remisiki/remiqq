@@ -19,14 +19,14 @@ window.addEventListener('DOMContentLoaded', () => {
     .on('set-my-avatar', (e, url) => {
         addMyAvatar(url);
       })
-    .on('set-chat', (e, id, name, time, seq, raw_message, group, avatar_url) => {
-        addNewChat(id, group, name, time, seq, raw_message, avatar_url, () => ipcRenderer.send('sync-message', [id, group]));
+    .on('set-chat', (e, id, name, time, raw_message, last_name, group, avatar_url, unread) => {
+        addNewChat(id, group, name, time, raw_message, last_name, avatar_url, unread, () => ipcRenderer.send('sync-message', [id, group]));
       })
     .on('set-message', (e, doms, name, time, from_me, avatar_url, from_sync) => {
           addNewMessage(doms, name, time, from_me, avatar_url, from_sync);
       })
-    .on('update-chat', (e, id, group, time, raw_message) => {
-        updateChat(id, group, time, raw_message);
+    .on('update-chat', (e, id, name, group, time, raw_message, top, unread) => {
+        updateChat(id, name, group, time, raw_message, top, unread);
       })
     .on('clear', (e) => {
         clearMessage();

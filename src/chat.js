@@ -4,7 +4,7 @@ const { User, Group } = require("oicq");
 const { getTime, unescapeHtml, removeNewLines } = require("./utils");
 
 
-function addNewChat(id, group, name, time, seq, raw_message, avatar_url, callback) {
+function addNewChat(id, group, name, time, raw_message, last_name, avatar_url, unread, callback) {
 	const avatar = document.createElement("img");
 	avatar.className = "avatar";
 	avatar.src = avatar_url;
@@ -15,11 +15,12 @@ function addNewChat(id, group, name, time, seq, raw_message, avatar_url, callbac
 
 	const chat_last = document.createElement("div");
 	chat_last.className = "chat-last";
-	chat_last.innerText = removeNewLines(raw_message);
 
 	const chat_time = document.createElement("div");
 	chat_time.className = "chat-time";
-	chat_time.innerText = time;
+
+	const chat_unread = document.createElement("div");
+	chat_unread.className = "chat-unread";
 	
 	const chat_container = document.createElement("div");
 	chat_container.className = "chat-container";
@@ -38,27 +39,67 @@ function addNewChat(id, group, name, time, seq, raw_message, avatar_url, callbac
 	chat_container.appendChild(chat);
 	chat_container.appendChild(chat_last);
 	chat_container.appendChild(chat_time);
-	document.querySelector("#chat-list").appendChild(chat_container);
+	chat_container.appendChild(chat_unread);
+	document.getElementById("chat-list").appendChild(chat_container);
+	updateChat(id, last_name, group, time, raw_message, undefined, unread);
 }
 exports.addNewChat = addNewChat;
 
-function updateChat(id, group, time, raw_message) {
+function updateChat(id, name, group, time, raw_message, top = true, unread = 0) {
 	const chat_container = document.getElementById(`chat-list-${id}${(group) ? 'g' : 'p'}`);
 	chat_container.getElementsByClassName("chat-time")[0].innerText = time;
-	chat_container.getElementsByClassName("chat-last")[0].innerText = removeNewLines(raw_message);
+	const chat_last = chat_container.getElementsByClassName("chat-last")[0];
+	chat_last.innerHTML = "";
+	const chat_sender_name = document.createElement("span");
+	chat_sender_name.className = `link-text`;
+	chat_sender_name.innerText = `${name}:`;
+	if (group) {
+		chat_last.appendChild(chat_sender_name);
+	}
+	chat_last.innerHTML += removeNewLines(raw_message) ?? "";
+	if (top) {
+		const chat_list = document.getElementById("chat-list");
+		chat_list.insertBefore(chat_container, chat_list.firstChild);
+	}
+	const chat_unread = chat_container.getElementsByClassName("chat-unread")[0];
+	if (chat_unread.innerText && unread) {
+		const count = parseInt(chat_unread.innerText);
+		if (count >= 99) {
+			chat_unread.innerText = "99+";
+		}
+		else {
+			chat_unread.innerText = count + unread;
+		}
+		chat_unread.style.display = "block";
+	}
+	else if (unread) {
+		if (unread >= 99) {
+			chat_unread.innerText = "99+";
+		}
+		else {
+			chat_unread.innerText = unread;
+		}
+		chat_unread.style.display = "block";
+	}
+	else {
+		chat_unread.innerText = "";
+		chat_unread.style.display = "none";
+	}
 }
 exports.updateChat = updateChat;
 
-Client.prototype.addChatList = function (chats, group) {
+Client.prototype.addChatList = function (chats) {
 	let chat_list = [];
 	for (const chat of chats) {
 		const id = chat.id;
 		const name = chat.name;
 		const time = getTime(chat.time);
-		const seq = chat.seq;
+		const group = (chat.src === "group");
 		const avatar_url = this.getAvatar(id, group);
 		const raw_message = chat.last;
-		windowEmit('set-chat', id, name, time, seq, raw_message, group, avatar_url);
+		const last_name = chat.last_name;
+		const unread=chat.unread;
+		windowEmit('set-chat', id, name, time, raw_message, last_name, group, avatar_url, unread);
 		chat_list.push({
 			id: id,
 			group: group

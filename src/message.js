@@ -5,7 +5,7 @@ const { windowEmit } = require("./window");
 const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces, compareChat, getRawMessage, removeNewLines } = require("./utils");
 const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromDom, getImgSrcFromSegment } = require("./image");
 const jsdom = require("jsdom");
-const { updateChatListData } = require("./sqlite");
+const { updateChatListData, dbUpdateUnread } = require("./sqlite");
 
 const editText = (selector, text) => {
     const element = document.getElementById(selector);
@@ -139,9 +139,11 @@ Client.prototype.sendMessage = async function (html, id, group, db) {
 	const time = getTime(msg_callback.time);
 	const avatar_url = this.getAvatar();
 	const raw_message = getRawMessage(send_list);
-	windowEmit('set-message', send_list, this.nickname, time, true, avatar_url);
-	windowEmit('update-chat', id, group, time, raw_message);
-	updateChatListData(db, id, group, "", msg_callback.time, raw_message);
+	const name = this.nickname;
+	windowEmit('set-message', send_list, name, time, true, avatar_url);
+	windowEmit('update-chat', id, name, group, time, raw_message, undefined, 0);
+	updateChatListData(db, id, group, "", msg_callback.time, raw_message, name);
+	dbUpdateUnread(db, id, group, "clear");
 }
 
 Client.prototype.getHistoryById = async function (id, group) {
@@ -176,14 +178,18 @@ Client.prototype.syncMessage = async function (db, id, group) {
 		const sender_id = (group) ? (msg.sender.user_id) : (msg.from_id);
 		const from_me = (sender_id === this.uin);
 		const avatar_url = this.getAvatar(sender_id);
+		const seq = msg.seq;
+		const _group = new Group(this, id);
+		const last_seq = await _group._setting();
 		windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, true);
 		if (i === (history.num - 1)) {
 			const name = (group) ? null : await this.getName(id);
-			windowEmit('update-chat', id, group, time, raw_message);
-			updateChatListData(db, id, group, name ?? msg.group_name, msg.time, raw_message);
+			windowEmit('update-chat', id, sender_name, group, time, raw_message, false, 0);
+			updateChatListData(db, id, group, name ?? msg.group_name, msg.time, raw_message, sender_name);
 		}
 	}
 	windowEmit('scroll-message');
+	dbUpdateUnread(db, id, group, "clear");
 }
 
 Client.prototype.getMessageSenderName = async function (msg) {
@@ -229,17 +235,19 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 	const avatar_url = this.getAvatar(sender_id);
 	const group_avatar_url = (msg_is_group) ? this.getAvatar(group_id, true) : null;
 	const escaped_doms = escapeHtmlFromDom(e.message);
-	if (current_uid === (group_id ?? sender_id)) {
+	const in_section = (current_uid === (group_id ?? sender_id));
+	if (in_section) {
 		windowEmit('set-message', e.message, name, time, from_me, avatar_url);
 	}
-	updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, escapeHtml(e.raw_message));
+	updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name);
+	dbUpdateUnread(db, group_id ?? sender_id, msg_is_group, (in_section) ? "clear" : "plus");
 	const search_item = {id: group_id ?? sender_id, group: msg_is_group};
 	if (!chat_list.some(item => compareChat(item, search_item))) {
-		windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, 0, e.raw_message, msg_is_group, group_avatar_url ?? avatar_url);
+		windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, msg_is_group, group_avatar_url ?? avatar_url, (in_section) ? 0 : 1);
 		return search_item;
 	}
 	else if (chat_list) {
-		windowEmit('update-chat', group_id ?? sender_id, msg_is_group, time, e.raw_message);
+		windowEmit('update-chat', group_id ?? sender_id, name, msg_is_group, time, e.raw_message, undefined, (in_section) ? 0 : 1);
 	}
 	return null;
 }
@@ -252,12 +260,12 @@ Client.prototype.syncMessageFromOtherDevice = function(e, db, current_uid) {
 	const group_name = (msg_is_group) ? e.group_name : null;
 	const name = this.nickname;
 	const avatar_url = this.getAvatar();
-	windowEmit('update-chat', group_id ?? receiver_id, msg_is_group, time, e.raw_message);
-	updateChatListData(db, group_id ?? receiver_id, msg_is_group, "", e.time, escapeHtml(e.raw_message));
-	if (current_uid !== (group_id ?? receiver_id)) {
-		return;
+	windowEmit('update-chat', group_id ?? receiver_id, name, msg_is_group, time, e.raw_message, undefined, 0);
+	updateChatListData(db, group_id ?? receiver_id, msg_is_group, "", e.time, e.raw_message, name);
+	if (current_uid === (group_id ?? receiver_id)) {
+		windowEmit('set-message', e.message, name, time, true, avatar_url);
 	}
-	windowEmit('set-message', e.message, name, time, true, avatar_url);
+	dbUpdateUnread(db, (group_id ?? receiver_id), msg_is_group, "clear");
 }
 
 function scrollMessageBoxToBottom() {
