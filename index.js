@@ -42,11 +42,14 @@ if (require.main === module) {
 		.login(process.env.PASSWORD_KEY);
 
 	ipcMain.on("send-message", (e, html) => bot.sendMessage(html, current_uid, current_is_group, db));
+	ipcMain.on("mark-read", (e) => {
+		bot.markRead(db, current_uid, current_is_group, chat_list);
+	});
 	ipcMain.on("sync-message", (e, args) => {
 		windowEmit('check-cache', ...args);
 		current_uid = args[0];
 		current_is_group = args[1];
-		ipcMain.once('is-cached', (e, is_cached) => {
+		ipcMain.once('is-cached', (_e, is_cached) => {
 			const search_item = {id: current_uid, group: current_is_group};
 			const unread = chat_list.find(item => compareChat(item, search_item)).unread;
 			if (!is_cached || unread) {

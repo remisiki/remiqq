@@ -1,7 +1,8 @@
 const { contextBridge, ipcRenderer, BrowserWindow } = require('electron');
 
-const { addNewMessage, clearMessage, scrollMessageBoxToBottom } = require("./src/message");
+const { addNewMessage, clearMessage } = require("./src/message");
 const { addNewChat, addMyAvatar, updateChat, cacheChat, chatIsCached, setChatFromCache } = require("./src/chat");
+const { isAtUp, scrollMessageBoxToBottom, cacheUnread, decreaseUnread } = require("./src/utils");
 
 
 contextBridge.exposeInMainWorld('api', {
@@ -10,6 +11,13 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.send('send-message', send_box.innerHTML);
       send_box.innerHTML = "";
     },
+    decUnread: () => {
+      decreaseUnread();
+      ipcRenderer.send('mark-read');
+    },
+    scrollToBottom: () => {
+      scrollMessageBoxToBottom();
+    }
 })
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -22,8 +30,8 @@ window.addEventListener('DOMContentLoaded', () => {
     .on('set-chat', (e, id, name, time, raw_message, last_name, group, avatar_url, unread) => {
         addNewChat(id, group, name, time, raw_message, last_name, avatar_url, unread, () => ipcRenderer.send('sync-message', [id, group]));
       })
-    .on('set-message', (e, doms, name, time, from_me, avatar_url, from_sync) => {
-        addNewMessage(doms, name, time, from_me, avatar_url, from_sync);
+    .on('set-message', (e, doms, name, time, from_me, avatar_url, hide, top) => {
+        addNewMessage(doms, name, time, from_me, avatar_url, hide, top);
       })
     .on('update-chat', (e, id, name, group, time, raw_message, top, unread) => {
         updateChat(id, name, group, time, raw_message, top, unread);
@@ -31,8 +39,8 @@ window.addEventListener('DOMContentLoaded', () => {
     .on('clear', (e) => {
         clearMessage();
       })
-    .on('scroll-message', (e) => {
-        scrollMessageBoxToBottom();
+    .on('scroll-message', (e, smooth) => {
+        scrollMessageBoxToBottom(smooth);
       })
     .on('cache-chat', (e, id, group) => {
         cacheChat(id, group);
@@ -43,6 +51,12 @@ window.addEventListener('DOMContentLoaded', () => {
       })
     .on('fetch-cache', (e, id, group) => {
         setChatFromCache(id, group);
+      })
+    .on('get-view-height', (e) => {
+        ipcRenderer.send('is-at-up', isAtUp());
+      })
+    .on('set-scroll-unread', (e, unread) => {
+        cacheUnread(unread);
       })
     ;
 })

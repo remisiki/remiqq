@@ -2,10 +2,11 @@ const { User, Group } = require("oicq");
 const { segment } = require("oicq/lib/message/elements");
 const { Client } = require("oicq");
 const { windowEmit } = require("./window");
-const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces, compareChat, getRawMessage, removeNewLines, messageScroll, lazyImageLoad, lazyImageError } = require("./utils");
+const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces, compareChat, getRawMessage, removeNewLines, messageScroll, lazyImageLoad, lazyImageError, scrollMessageBoxToBottom } = require("./utils");
 const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromDom, getImgSrcFromSegment } = require("./image");
 const jsdom = require("jsdom");
 const { updateChatListData, dbUpdateUnread } = require("./sqlite");
+const { ipcMain } = require('electron');
 
 const editText = (selector, text) => {
     const element = document.getElementById(selector);
@@ -14,7 +15,7 @@ const editText = (selector, text) => {
     }
 }
 
-function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, hide = false) {
+function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, hide = false, top = true) {
 
 	const title = document.createElement("div");
 	title.className = "msg-title";
@@ -68,7 +69,7 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 	avatar.src = avatar_url;
 
 	const msg_wrapper = document.createElement("div");
-	msg_wrapper.style.clear = "both";
+	msg_wrapper.className = "msg-wrapper";
 	msg_wrapper.appendChild(avatar);
 	msg_wrapper.appendChild(msg_container);
 
@@ -85,7 +86,9 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 	msg_box.appendChild(msg_gap_bottom);
 	// msg_box.insertBefore(msg_wrapper, msg_box.firstChild);
 	// msg_box.insertBefore(msg_gap_bottom, msg_box.firstChild);
-	messageScroll(msg_container);
+	if (top) {
+		scrollMessageBoxToBottom();
+	}
 	if (!hide) {
 		msg_box.style.display = "flex";
 	}
@@ -182,11 +185,11 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list) {
 			const search_item = {id: id, group: group, unread: 0};
 			const chat_data = chat_list.find(item => compareChat(item, search_item));
 			if (!chat_data) {
-				windowEmit('set-chat', id, name, time, raw_message, group, group_avatar_url ?? avatar_url, 0);
+				windowEmit('set-chat', id, name ?? msg.group_name, time, raw_message, sender_name, group, group_avatar_url ?? avatar_url, 0);
 				chat_list = chat_list.concat([search_item]);
 			}
 			else if (chat_list) {
-				windowEmit('update-chat', id, name, group, time, raw_message, undefined, 0);
+				windowEmit('update-chat', id, sender_name, group, time, raw_message, undefined, 0);
 				chat_data.unread = 0;
 			}
 			updateChatListData(db, id, group, name ?? msg.group_name, msg.time, raw_message, sender_name);
@@ -195,7 +198,7 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list) {
 			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, true);
 		}
 	}
-	windowEmit('scroll-message');
+	windowEmit('scroll-message', false);
 	windowEmit('cache-chat', id, group);
 	dbUpdateUnread(db, id, group, "clear");
 }
@@ -247,26 +250,47 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 	const group_avatar_url = (msg_is_group) ? this.getAvatar(group_id, true) : null;
 	const in_section = (current_uid === (group_id ?? sender_id));
 	if (in_section) {
-		windowEmit('set-message', e.message, name, time, from_me, avatar_url);
-		windowEmit('cache-chat', group_id ?? sender_id, msg_is_group);
+		windowEmit('get-view-height');
+		ipcMain.once('is-at-up', (_e, is_at_up) => {
+			const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: (is_at_up) ? 1 : 0};
+			const chat_data = chat_list.find(item => compareChat(item, search_item));
+			if (!chat_data) {
+				windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, name, msg_is_group, group_avatar_url ?? avatar_url, (is_at_up) ? 1 : 0);
+				chat_list = chat_list.concat([search_item]);
+			}
+			else if (chat_list) {
+				windowEmit('update-chat', group_id ?? sender_id, name, msg_is_group, time, e.raw_message, undefined, (is_at_up) ? 1 : 0);
+				if (!is_at_up) {
+					chat_data.unread = 0;
+				}
+				else {
+					chat_data.unread ++;
+					windowEmit('set-scroll-unread', chat_data.unread);
+				}
+			}
+			windowEmit('set-message', e.message, name, time, from_me, avatar_url, undefined, false);
+			if (!is_at_up) {
+				windowEmit('scroll-message');
+			}
+			windowEmit('cache-chat', group_id ?? sender_id, msg_is_group);
+			updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name);
+			dbUpdateUnread(db, group_id ?? sender_id, msg_is_group, (is_at_up) ? "plus" : "clear");
+		});
 	}
-	const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: 1};
-	const chat_data = chat_list.find(item => compareChat(item, search_item));
-	if (!chat_data) {
-		windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, msg_is_group, group_avatar_url ?? avatar_url, (in_section) ? 0 : 1);
-		chat_list = chat_list.concat([search_item]);
-	}
-	else if (chat_list) {
-		windowEmit('update-chat', group_id ?? sender_id, name, msg_is_group, time, e.raw_message, undefined, (in_section) ? 0 : 1);
-		if (in_section) {
-			chat_data.unread = 0;
+	else {
+		const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: 1};
+		const chat_data = chat_list.find(item => compareChat(item, search_item));
+		if (!chat_data) {
+			windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, name, msg_is_group, group_avatar_url ?? avatar_url, 1);
+			chat_list = chat_list.concat([search_item]);
 		}
-		else {
+		else if (chat_list) {
+			windowEmit('update-chat', group_id ?? sender_id, name, msg_is_group, time, e.raw_message, undefined, 1);
 			chat_data.unread ++;
 		}
+		updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name);
+		dbUpdateUnread(db, group_id ?? sender_id, msg_is_group, "plus");
 	}
-	updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name);
-	dbUpdateUnread(db, group_id ?? sender_id, msg_is_group, (in_section) ? "clear" : "plus");
 }
 
 Client.prototype.syncMessageFromOtherDevice = async function(e, db, current_uid, chat_list) {
@@ -289,7 +313,7 @@ Client.prototype.syncMessageFromOtherDevice = async function(e, db, current_uid,
 	const search_item = {id: group_id ?? receiver_id, group: msg_is_group, unread: 0};
 	const chat_data = chat_list.find(item => compareChat(item, search_item));
 	if (!chat_data) {
-		windowEmit('set-chat', group_id ?? receiver_id, group_name ?? receiver_name, time, e.raw_message, msg_is_group, group_avatar_url ?? receiver_avatar_url, (in_section) ? 0 : 1);
+		windowEmit('set-chat', group_id ?? receiver_id, group_name ?? receiver_name, time, e.raw_message, group_name ?? receiver_name, msg_is_group, group_avatar_url ?? receiver_avatar_url, (in_section) ? 0 : 1);
 		chat_list = chat_list.concat([search_item]);
 	}
 	else if (chat_list) {
@@ -300,10 +324,12 @@ Client.prototype.syncMessageFromOtherDevice = async function(e, db, current_uid,
 	dbUpdateUnread(db, (group_id ?? receiver_id), msg_is_group, "clear");
 }
 
-function scrollMessageBoxToBottom() {
-	const msg_box = document.getElementById("msg-box");
-	msg_box.style.scrollBehavior = "unset";
-	msg_box.scrollTop = msg_box.scrollHeight;
-	msg_box.style.scrollBehavior = "smooth";
+Client.prototype.markRead = function(db, current_uid, group, chat_list) {
+	const search_item = {id: current_uid, group: group, unread: 1};
+	const chat_data = chat_list.find(item => compareChat(item, search_item));
+	if (chat_list && (chat_data?.unread > 0)) {
+		chat_data.unread --;
+		windowEmit('update-chat', current_uid, undefined, group, undefined, undefined, undefined, -1);
+		dbUpdateUnread(db, current_uid, group, "minus");
+	}
 }
-exports.scrollMessageBoxToBottom = scrollMessageBoxToBottom;

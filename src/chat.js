@@ -47,6 +47,30 @@ exports.addNewChat = addNewChat;
 
 function updateChat(id, name, group, time, raw_message, top = true, unread = 0) {
 	const chat_container = document.getElementById(`chat-list-${id}${(group) ? 'g' : 'p'}`);
+	const chat_unread = chat_container.getElementsByClassName("chat-unread")[0];
+	if (unread === -1) {
+		let count;
+		try {
+			count = parseInt(chat_unread.innerText);
+		}
+		catch (e) {
+			return;
+		}
+		if (!count || count > 100) {
+			return;
+		}
+		else if (count === 100) {
+			chat_unread.innerText = 99;
+		}
+		else if (count > 1) {
+			chat_unread.innerText = count - 1;
+		}
+		else if (count === 1) {
+			chat_unread.innerText = "";
+			chat_unread.style.display = "none";
+		}
+		return;
+	}
 	chat_container.getElementsByClassName("chat-time")[0].innerText = time;
 	const chat_last = chat_container.getElementsByClassName("chat-last")[0];
 	chat_last.innerHTML = "";
@@ -61,7 +85,6 @@ function updateChat(id, name, group, time, raw_message, top = true, unread = 0) 
 		const chat_list = document.getElementById("chat-list");
 		chat_list.insertBefore(chat_container, chat_list.firstChild);
 	}
-	const chat_unread = chat_container.getElementsByClassName("chat-unread")[0];
 	if (chat_unread.innerText && unread) {
 		const count = parseInt(chat_unread.innerText);
 		if (count >= 99) {

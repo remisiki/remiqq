@@ -134,6 +134,50 @@ function escapeHtml(html) {
 	return html.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\$/g, '&#36;').replace(/`/g, '&#96;');
 }
 
+function handleScroll(e) {
+	const msg_box = e.target;
+	const current_height = msg_box.scrollTop + msg_box.clientHeight;
+	const arrow_container = document.getElementsByClassName("arrow-container")[0];
+	const arrow_unread = document.getElementsByClassName("arrow-unread")[0];
+	let unread_heights = 0;
+	let count = window.sessionStorage.getItem('unread');
+	try {
+		count = parseInt(count);
+	}
+	catch (_e) {
+		window.sessionStorage.setItem('unread', 0);
+		if (msg_box.scrollHeight - msg_box.scrollTop > msg_box.clientHeight * 2) {
+			arrow_container.classList.add("arrow-down");
+		}
+		else {
+			arrow_container.classList.remove("arrow-down");
+		}
+		return;
+	}
+	if (!count || count <= 0) {
+		window.sessionStorage.setItem('unread', 0);
+		if (msg_box.scrollHeight - msg_box.scrollTop > msg_box.clientHeight * 2) {
+			arrow_container.classList.add("arrow-down");
+		}
+		else {
+			arrow_container.classList.remove("arrow-down");
+		}
+		return;
+	}
+	const heights = msg_box.getElementsByClassName("msg-wrapper");
+	const len = heights.length;
+	if (len < count) {
+		window.sessionStorage.setItem('unread', 0);
+		return;
+	}
+	arrow_unread.classList.add("arrow-down");
+	arrow_unread.innerText = count;
+	const h = heights[len - count].offsetTop;
+	if (current_height >= h) {
+		window.api.decUnread();
+	}
+}
+
 document.getElementById("send-box").addEventListener('paste', handlePaste, false);
 document.getElementById("send-box").addEventListener('drop', handleDrop);
 document.getElementById("send-box").addEventListener('dragover', (e) => {
@@ -141,5 +185,19 @@ document.getElementById("send-box").addEventListener('dragover', (e) => {
 	e.dataTransfer.effectAllowed = 'copy';
 });
 document.getElementById("send-box").onkeydown = (e) => handleKey(e);
-document.getElementById("send-btn").addEventListener("click",
+document.getElementById("send-btn").addEventListener('click',
 	() => window.api.sendMessage());
+
+const msg_box = document.getElementById("msg-box");
+msg_box.addEventListener('scroll', (e) => {
+	handleScroll(e);
+});
+const msgMonitor = new MutationObserver((e) => {
+	handleScroll(e[0]);
+});
+const config = {
+	childList: true
+};
+msgMonitor.observe(msg_box, config);
+
+document.getElementsByClassName("arrow-container")[0].addEventListener('click', window.api.scrollToBottom);

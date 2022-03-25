@@ -3,15 +3,15 @@ const sqlite3 = require("sqlite3");
 
 function updateChatListData(db, id, group, name = "", timestamp, last_message, last_name) {
 	let query;
-	name = name.replace(/"/g, "&quot;");
-	last_message = last_message.replace(/"/g, "&quot;");
-	last_name = last_name.replace(/"/g, "&quot;");
-	if (!name) {
+	const _name = name.replace(/"/g, "&quot;");
+	const _last_message = last_message.replace(/"/g, "&quot;");
+	const _last_name = last_name.replace(/"/g, "&quot;");
+	if (!_name) {
 		query = `update "${(group) ? "group" : "private"}"
 			set 
 				time = ${timestamp}, 
-				last = "${last_message}",
-				last_name = "${last_name}"
+				last = "${_last_message}",
+				last_name = "${_last_name}"
 			where
 				id = ${id}
 			;`;
@@ -28,18 +28,18 @@ function updateChatListData(db, id, group, name = "", timestamp, last_message, l
 			values
 			(
 				${id}, 
-				"${name}", 
+				"${_name}", 
 				${timestamp}, 
-				"${last_message}",
-				"${last_name}"
+				"${_last_message}",
+				"${_last_name}"
 			) 
 			on conflict(id) 
 				do 
 					update set 
-						name = "${name}", 
+						name = "${_name}", 
 						time = ${timestamp}, 
-						last = "${last_message}",
-						last_name = "${last_name}"
+						last = "${_last_message}",
+						last_name = "${_last_name}"
 			;`;
 	}
 	db.run(query);
@@ -96,7 +96,7 @@ async function dbUpdateUnread(db, id, group, type = "clear") {
 			;
 		`;
 	}
-	else if (type === "plus") {
+	else if (type === "plus" || type === "minus") {
 		query = `
 			select "unread" from "${(group) ? "group" : "private"}"
 			where
@@ -105,7 +105,15 @@ async function dbUpdateUnread(db, id, group, type = "clear") {
 		`;
 		let count = await dbQueryResultSet(db, query);
 		count = count[0].unread ?? 0;
-		count ++;
+		if (type === "plus") {
+			count ++;
+		}
+		else if (count > 0) {
+			count --;
+		}
+		else {
+			return;
+		}
 		query = `
 			update "${(group) ? "group" : "private"}"
 			set 

@@ -9,8 +9,19 @@ function getTime(timestamp, short = true) {
 		return null;
 	}
 	const date = new Date(timestamp * 1000);
+	const now = new Date(Date.now());
 	if (short) {
-		return `${preTime(date.getHours())}:${preTime(date.getMinutes())}`;
+		if (now.getFullYear() === date.getFullYear()) {
+			if (now.getMonth() === date.getMonth() && now.getDate() === date.getDate()) {
+				return `${preTime(date.getHours())}:${preTime(date.getMinutes())}`;
+			}
+			else {
+				return `${preTime(date.getMonth() + 1)}-${preTime(date.getDate())}`;
+			}
+		}
+		else {
+			return `${date.getFullYear()}`;
+		}
 	}
 	else {
 		return `${date.getFullYear()}-${preTime(date.getMonth() + 1)}-${preTime(date.getDate())} ${preTime(date.getHours())}:${preTime(date.getMinutes())}:${preTime(date.getSeconds())}`;
@@ -104,11 +115,17 @@ exports.getRawMessage = getRawMessage;
 
 function messageScroll(msg) {
 	const msg_box = document.getElementById("msg-box");
-	if (msg_box.scrollHeight - msg_box.scrollTop <= msg.clientHeight + msg_box.clientHeight + 20) {
+	if (msg_box.scrollHeight - msg_box.scrollTop <= msg.clientHeight + msg_box.clientHeight + 10) {
 		msg_box.scrollTop = msg_box.scrollHeight;
 	}
 }
 exports.messageScroll = messageScroll;
+
+function isAtUp() {
+	const msg_box = document.getElementById("msg-box");
+	return (msg_box.scrollHeight - msg_box.scrollTop > msg_box.clientHeight + 210);
+}
+exports.isAtUp = isAtUp;
 
 function lazyImageLoad(e) {
 	const parent = e.currentTarget.parentNode;
@@ -126,3 +143,35 @@ function lazyImageError(e) {
 	}, 10);
 }
 exports.lazyImageError = lazyImageError;
+
+function scrollMessageBoxToBottom(smooth = true) {
+	const msg_box = document.getElementById("msg-box");
+	if (!smooth) {
+		msg_box.style.scrollBehavior = "unset";
+	}
+	msg_box.scrollTop = msg_box.scrollHeight;
+	if (!smooth) {
+		msg_box.style.scrollBehavior = "smooth";
+	}
+}
+exports.scrollMessageBoxToBottom = scrollMessageBoxToBottom;
+
+function cacheUnread(unread) {
+	window.sessionStorage.setItem('unread', unread);
+}
+exports.cacheUnread = cacheUnread;
+
+function decreaseUnread() {
+	const unread = window.sessionStorage.getItem('unread');
+	window.sessionStorage.setItem('unread', unread - 1);
+	const arrow_unread = document.getElementsByClassName("arrow-unread")[0];
+	if (unread <= 1) {
+		arrow_unread.classList.remove("arrow-down");
+		document.getElementsByClassName("arrow-container")[0].classList.remove("arrow-down");
+		arrow_unread.innerText = "";
+	}
+	else {
+		arrow_unread.innerText = unread - 1;
+	}
+}
+exports.decreaseUnread = decreaseUnread;
