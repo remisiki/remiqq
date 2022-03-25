@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer, BrowserWindow } = require('electron');
 
 const { addNewMessage, clearMessage, scrollMessageBoxToBottom } = require("./src/message");
-const { addNewChat, addMyAvatar, updateChat } = require("./src/chat");
+const { addNewChat, addMyAvatar, updateChat, cacheChat, chatIsCached, setChatFromCache } = require("./src/chat");
 
 
 contextBridge.exposeInMainWorld('api', {
@@ -23,7 +23,7 @@ window.addEventListener('DOMContentLoaded', () => {
         addNewChat(id, group, name, time, raw_message, last_name, avatar_url, unread, () => ipcRenderer.send('sync-message', [id, group]));
       })
     .on('set-message', (e, doms, name, time, from_me, avatar_url, from_sync) => {
-          addNewMessage(doms, name, time, from_me, avatar_url, from_sync);
+        addNewMessage(doms, name, time, from_me, avatar_url, from_sync);
       })
     .on('update-chat', (e, id, name, group, time, raw_message, top, unread) => {
         updateChat(id, name, group, time, raw_message, top, unread);
@@ -33,5 +33,16 @@ window.addEventListener('DOMContentLoaded', () => {
       })
     .on('scroll-message', (e) => {
         scrollMessageBoxToBottom();
-      });
+      })
+    .on('cache-chat', (e, id, group) => {
+        cacheChat(id, group);
+      })
+    .on('check-cache', (e, id, group) => {
+        const is_cached = chatIsCached(id, group);
+        ipcRenderer.send('is-cached', is_cached);
+      })
+    .on('fetch-cache', (e, id, group) => {
+        setChatFromCache(id, group);
+      })
+    ;
 })

@@ -2,7 +2,7 @@ const { User, Group } = require("oicq");
 const { segment } = require("oicq/lib/message/elements");
 const { Client } = require("oicq");
 const { windowEmit } = require("./window");
-const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces, compareChat, getRawMessage, removeNewLines } = require("./utils");
+const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces, compareChat, getRawMessage, removeNewLines, messageScroll, lazyImageLoad, lazyImageError } = require("./utils");
 const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromDom, getImgSrcFromSegment } = require("./image");
 const jsdom = require("jsdom");
 const { updateChatListData, dbUpdateUnread } = require("./sqlite");
@@ -14,14 +14,7 @@ const editText = (selector, text) => {
     }
 }
 
-function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, no_scroll = false) {
-
-	const messageScroll = (msg) => {
-		const msg_box = document.getElementById("msg-box");
-		if (msg_box.scrollHeight - msg_box.scrollTop <= msg.clientHeight + msg_box.clientHeight + 20) {
-			msg_box.scrollTop = msg_box.scrollHeight;
-		}
-	}
+function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, hide = false) {
 
 	const title = document.createElement("div");
 	title.className = "msg-title";
@@ -50,12 +43,11 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 			case "image":
 				const msg_img = document.createElement("img");
 				msg_img.className = "msg-img";
+				msg_img.loading = "lazy";
 				msg_img.src = getImgSrcFromSegment(dom);
-				if (!no_scroll) {
-					msg_img.addEventListener("load", () => {
-						messageScroll(msg_container);
-					});
-				}
+				msg_container.classList.add("lazyImageWaiting");
+		        msg_img.addEventListener("error", lazyImageError);
+				msg_img.addEventListener("load", lazyImageLoad);
 				msg_container.appendChild(msg_img);
 				break;
 			default:
@@ -84,14 +76,18 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 	msg_gap_bottom.className = "gap";
 
 	const msg_box = document.querySelector('#msg-box');
+	if (hide) {
+		msg_box.style.display = "none";
+	}
 	msg_box.removeChild(msg_box.lastChild);
 	// msg_box.removeChild(msg_box.firstChild);
 	msg_box.appendChild(msg_wrapper);
 	msg_box.appendChild(msg_gap_bottom);
 	// msg_box.insertBefore(msg_wrapper, msg_box.firstChild);
 	// msg_box.insertBefore(msg_gap_bottom, msg_box.firstChild);
-	if (!img_only && !no_scroll) {
-		messageScroll(msg_container);
+	messageScroll(msg_container);
+	if (!hide) {
+		msg_box.style.display = "flex";
 	}
 	
 }
@@ -142,6 +138,7 @@ Client.prototype.sendMessage = async function (html, id, group, db) {
 	const name = this.nickname;
 	windowEmit('set-message', send_list, name, time, true, avatar_url);
 	windowEmit('update-chat', id, name, group, time, raw_message, undefined, 0);
+	windowEmit('cache-chat', id, group);
 	updateChatListData(db, id, group, "", msg_callback.time, raw_message, name);
 	dbUpdateUnread(db, id, group, "clear");
 }
@@ -165,7 +162,7 @@ Client.prototype.getHistoryById = async function (id, group) {
 	};
 };
 
-Client.prototype.syncMessage = async function (db, id, group) {
+Client.prototype.syncMessage = async function (db, id, group, chat_list) {
 	const history = await this.getHistoryById(id, group);
 	windowEmit('clear');
 	for (let i = 0; i < history.num; i ++) {
@@ -178,17 +175,28 @@ Client.prototype.syncMessage = async function (db, id, group) {
 		const sender_id = (group) ? (msg.sender.user_id) : (msg.from_id);
 		const from_me = (sender_id === this.uin);
 		const avatar_url = this.getAvatar(sender_id);
-		const seq = msg.seq;
-		const _group = new Group(this, id);
-		const last_seq = await _group._setting();
-		windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, true);
+		const group_avatar_url = (group) ? this.getAvatar(id, true) : null;
 		if (i === (history.num - 1)) {
+			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, false);
 			const name = (group) ? null : await this.getName(id);
-			windowEmit('update-chat', id, sender_name, group, time, raw_message, false, 0);
+			const search_item = {id: id, group: group, unread: 0};
+			const chat_data = chat_list.find(item => compareChat(item, search_item));
+			if (!chat_data) {
+				windowEmit('set-chat', id, name, time, raw_message, group, group_avatar_url ?? avatar_url, 0);
+				chat_list = chat_list.concat([search_item]);
+			}
+			else if (chat_list) {
+				windowEmit('update-chat', id, name, group, time, raw_message, undefined, 0);
+				chat_data.unread = 0;
+			}
 			updateChatListData(db, id, group, name ?? msg.group_name, msg.time, raw_message, sender_name);
+		}
+		else {
+			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, true);
 		}
 	}
 	windowEmit('scroll-message');
+	windowEmit('cache-chat', id, group);
 	dbUpdateUnread(db, id, group, "clear");
 }
 
@@ -219,6 +227,9 @@ Client.prototype.getMessageSenderName = async function (msg) {
 }
 
 Client.prototype.getName = async function (id) {
+	if (!id) {
+		return null;
+	}
 	const user = new User(this, id);
 	const info = await user.getSimpleInfo();
 	return info.nickname;
@@ -234,37 +245,58 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 	const from_me = (sender_id === this.uin);
 	const avatar_url = this.getAvatar(sender_id);
 	const group_avatar_url = (msg_is_group) ? this.getAvatar(group_id, true) : null;
-	const escaped_doms = escapeHtmlFromDom(e.message);
 	const in_section = (current_uid === (group_id ?? sender_id));
 	if (in_section) {
 		windowEmit('set-message', e.message, name, time, from_me, avatar_url);
+		windowEmit('cache-chat', group_id ?? sender_id, msg_is_group);
 	}
-	updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name);
-	dbUpdateUnread(db, group_id ?? sender_id, msg_is_group, (in_section) ? "clear" : "plus");
-	const search_item = {id: group_id ?? sender_id, group: msg_is_group};
-	if (!chat_list.some(item => compareChat(item, search_item))) {
+	const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: 1};
+	const chat_data = chat_list.find(item => compareChat(item, search_item));
+	if (!chat_data) {
 		windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, msg_is_group, group_avatar_url ?? avatar_url, (in_section) ? 0 : 1);
-		return search_item;
+		chat_list = chat_list.concat([search_item]);
 	}
 	else if (chat_list) {
 		windowEmit('update-chat', group_id ?? sender_id, name, msg_is_group, time, e.raw_message, undefined, (in_section) ? 0 : 1);
+		if (in_section) {
+			chat_data.unread = 0;
+		}
+		else {
+			chat_data.unread ++;
+		}
 	}
-	return null;
+	updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name);
+	dbUpdateUnread(db, group_id ?? sender_id, msg_is_group, (in_section) ? "clear" : "plus");
 }
 
-Client.prototype.syncMessageFromOtherDevice = function(e, db, current_uid) {
+Client.prototype.syncMessageFromOtherDevice = async function(e, db, current_uid, chat_list) {
 	const msg_is_group = (e.message_type === "group");
 	const receiver_id = e.to_id ?? null;
+	const receiver_name = await this.getName(receiver_id);
 	const group_id = (msg_is_group) ? e.group_id : null;
 	const time = getTime(e.time);
 	const group_name = (msg_is_group) ? e.group_name : null;
 	const name = this.nickname;
 	const avatar_url = this.getAvatar();
+	const receiver_avatar_url = this.getAvatar(receiver_id);
+	const group_avatar_url = (msg_is_group) ? this.getAvatar(group_id, true) : null;
+	const in_section = (current_uid === (group_id ?? receiver_id));
 	windowEmit('update-chat', group_id ?? receiver_id, name, msg_is_group, time, e.raw_message, undefined, 0);
-	updateChatListData(db, group_id ?? receiver_id, msg_is_group, "", e.time, e.raw_message, name);
-	if (current_uid === (group_id ?? receiver_id)) {
+	if (in_section) {
 		windowEmit('set-message', e.message, name, time, true, avatar_url);
+		windowEmit('cache-chat', group_id ?? receiver_id, msg_is_group);
 	}
+	const search_item = {id: group_id ?? receiver_id, group: msg_is_group, unread: 0};
+	const chat_data = chat_list.find(item => compareChat(item, search_item));
+	if (!chat_data) {
+		windowEmit('set-chat', group_id ?? receiver_id, group_name ?? receiver_name, time, e.raw_message, msg_is_group, group_avatar_url ?? receiver_avatar_url, (in_section) ? 0 : 1);
+		chat_list = chat_list.concat([search_item]);
+	}
+	else if (chat_list) {
+		windowEmit('update-chat', group_id ?? receiver_id, group_name ?? receiver_name, msg_is_group, time, e.raw_message, undefined, (in_section) ? 0 : 1);
+		chat_data.unread = 0;
+	}
+	updateChatListData(db, group_id ?? receiver_id, msg_is_group, "", e.time, e.raw_message, name);
 	dbUpdateUnread(db, (group_id ?? receiver_id), msg_is_group, "clear");
 }
 

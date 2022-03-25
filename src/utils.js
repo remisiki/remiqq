@@ -101,3 +101,28 @@ function getRawMessage(msg) {
 	}).reduce((a, b) => (a + b));
 }
 exports.getRawMessage = getRawMessage;
+
+function messageScroll(msg) {
+	const msg_box = document.getElementById("msg-box");
+	if (msg_box.scrollHeight - msg_box.scrollTop <= msg.clientHeight + msg_box.clientHeight + 20) {
+		msg_box.scrollTop = msg_box.scrollHeight;
+	}
+}
+exports.messageScroll = messageScroll;
+
+function lazyImageLoad(e) {
+	const parent = e.currentTarget.parentNode;
+	parent.classList.remove("lazyImageWaiting");
+	messageScroll(parent);
+}
+exports.lazyImageLoad = lazyImageLoad;
+
+function lazyImageError(e) {
+	const parent = e.currentTarget.parentNode;
+	parent.classList.remove("lazyImageWaiting");
+	parent.classList.add("lazyImageError");
+	setTimeout(() => {
+		parent.classList.add("lazyImageErrorShow");
+	}, 10);
+}
+exports.lazyImageError = lazyImageError;

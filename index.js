@@ -43,9 +43,19 @@ if (require.main === module) {
 
 	ipcMain.on("send-message", (e, html) => bot.sendMessage(html, current_uid, current_is_group, db));
 	ipcMain.on("sync-message", (e, args) => {
-		bot.syncMessage(db, ...args);
+		windowEmit('check-cache', ...args);
 		current_uid = args[0];
 		current_is_group = args[1];
+		ipcMain.once('is-cached', (e, is_cached) => {
+			const search_item = {id: current_uid, group: current_is_group};
+			const unread = chat_list.find(item => compareChat(item, search_item)).unread;
+			if (!is_cached || unread) {
+				bot.syncMessage(db, ...args, chat_list);
+			}
+			else {
+				windowEmit('fetch-cache', ...args);
+			}
+		});
 	});
 	ipcMain.on("set-name", (e) => {
 		my_name = bot.nickname;
@@ -79,17 +89,14 @@ if (require.main === module) {
 			// 		this.login()
 			// 	})
 			// })
-			.on("message", async e => {
-				const new_chat = await bot.handleMessage(e, db, current_uid, chat_list);
-				if (new_chat) {
-					chat_list = chat_list.concat([new_chat]);
-				}
+			.on("message", e => {
+				bot.handleMessage(e, db, current_uid, chat_list);
 			})
 			.on("system.online", e => {
 				// bot.syncMessage(my_id);
 			})
 			.on("sync.message", e => {
-				bot.syncMessageFromOtherDevice(e, db, current_uid);
+				bot.syncMessageFromOtherDevice(e, db, current_uid, chat_list);
 			})
 			.on("sync.read", e => {
 				console.log(e);
