@@ -30,6 +30,7 @@ if (require.main === module) {
 	let my_avatar_url;
 	let my_name;
 	let chat_list = [];
+	let loading_history = false;
 	// const me = new User(bot, 2635799987);
 
 	const readline = require('readline').createInterface({
@@ -49,7 +50,7 @@ if (require.main === module) {
 		windowEmit('check-cache', ...args);
 		current_uid = args[0];
 		current_is_group = args[1];
-		ipcMain.once('is-cached', (_e, is_cached) => {
+		ipcMain.once('is-cached', async (_e, is_cached) => {
 			const search_item = {id: current_uid, group: current_is_group};
 			const unread = chat_list.find(item => compareChat(item, search_item)).unread;
 			if (!is_cached || unread) {
@@ -57,9 +58,21 @@ if (require.main === module) {
 			}
 			else {
 				windowEmit('fetch-cache', ...args);
+				for (const chat of chat_list) {
+					chat.top_time = chat.seq_reserced;
+				}
 			}
 		});
 	});
+	ipcMain.on('sync-message-more', async (e) => {
+		if (loading_history) {
+			console.log("Rejected");
+			return;
+		}
+		loading_history = true;
+		await bot.syncMessage(db, current_uid, current_is_group, chat_list, true);
+		loading_history = false;
+	})
 	ipcMain.on("set-name", (e) => {
 		my_name = bot.nickname;
 	});

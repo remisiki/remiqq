@@ -113,8 +113,18 @@ exports.updateChat = updateChat;
 
 function cacheChat(id, group) {
 	const unique_id =`${id}${(group) ? 'g' : 'p'}`;
-	const data = document.getElementById("msg-box");
-	window.sessionStorage.setItem(unique_id, data.innerHTML);
+	const msgs = document.getElementById("msg-box").getElementsByClassName("msg-wrapper");
+	let string_data = "";
+	let count = 0;
+	let index = msgs.length - 1;
+	while (count <= 20 && index >= 0) {
+		const msg = msgs[index];
+		string_data = msg.outerHTML + string_data;
+		count += msg.querySelectorAll(".msg, .msg-me").length;
+		index --;
+	}
+	string_data = `<div id="before-start" style="display: none;">Select a chat to start messaging</div>` + string_data;
+	window.sessionStorage.setItem(unique_id, string_data);
 }
 exports.cacheChat = cacheChat;
 
@@ -126,6 +136,7 @@ function setChatFromCache(id, group) {
 	for (const img of msg_img) {
 		img.addEventListener("error", lazyImageError);
 		img.addEventListener("load", lazyImageLoad);
+		img.addEventListener("click", () => window.open(img.src, '_blank'));
 	}
 	scrollMessageBoxToBottom(false);
 }
@@ -156,7 +167,8 @@ Client.prototype.addChatList = function (chats) {
 			id: id,
 			group: group,
 			unread: unread,
-			last_id: last_id
+			last_id: last_id,
+			top_time: -1
 		});
 	}
 	return chat_list;

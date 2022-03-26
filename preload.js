@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer, BrowserWindow } = require('electron');
 
-const { addNewMessage, clearMessage } = require("./src/message");
+const { addNewMessage, clearMessage, insertMessage } = require("./src/message");
 const { addNewChat, addMyAvatar, updateChat, cacheChat, chatIsCached, setChatFromCache } = require("./src/chat");
 const { isAtUp, scrollMessageBoxToBottom, cacheUnread, decreaseUnread } = require("./src/utils");
 // const { newImgWindow } = require('./src/window');
@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('api', {
     },
     openImg: (src) => {
       newImgWindow(src);
+    },
+    syncMore: () => {
+      ipcRenderer.send('sync-message-more');
     }
 })
 
@@ -63,7 +66,10 @@ window.addEventListener('DOMContentLoaded', () => {
         cacheUnread(unread);
       })
     .on('new-window', (e, url) => {
-        window.open(url, '_blank');;
+        window.open(url, '_blank');
+      })
+    .on('insert-message', (e, html) => {
+        insertMessage(html);
       })
     ;
 })

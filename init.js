@@ -135,7 +135,10 @@ function escapeHtml(html) {
 }
 
 function handleScroll(e) {
-	const msg_box = e.target;
+	const msg_box = document.getElementById("msg-box");
+	if (msg_box.scrollTop === 0) {
+		window.api.syncMore();
+	}
 	const current_height = msg_box.scrollTop + msg_box.clientHeight;
 	const arrow_container = document.getElementsByClassName("arrow-container")[0];
 	const arrow_unread = document.getElementsByClassName("arrow-unread")[0];
@@ -164,15 +167,16 @@ function handleScroll(e) {
 		}
 		return;
 	}
-	const heights = msg_box.getElementsByClassName("msg-wrapper");
+	const heights = msg_box.querySelectorAll(".msg, .msg-me");
 	const len = heights.length;
 	if (len < count) {
 		window.sessionStorage.setItem('unread', 0);
 		return;
 	}
+	arrow_container.classList.add("arrow-down");
 	arrow_unread.classList.add("arrow-down");
 	arrow_unread.innerText = count;
-	const h = heights[len - count].offsetTop;
+	const h = heights[len - count].offsetTop + heights[len - count].offsetParent.offsetTop;
 	if (current_height >= h) {
 		window.api.decUnread();
 	}
@@ -196,7 +200,9 @@ const msgMonitor = new MutationObserver((e) => {
 	handleScroll(e[0]);
 });
 const config = {
-	childList: true
+	childList: true,
+	attributes: true,
+	subtree: true
 };
 msgMonitor.observe(msg_box, config);
 

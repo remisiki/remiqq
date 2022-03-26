@@ -68,7 +68,7 @@ img {
     -webkit-user-drag: none;
 }
 
-.link-text {
+.link-text, .msg-name {
 	font-size: inherit;
 	color: #73b9f5;
 }
@@ -112,10 +112,20 @@ img {
 	user-select: none;
 }
 
+.msg-wrapper {
+	position: relative;
+	width: max-content;
+	margin-left: 10px;
+	margin-top: 5px;
+    margin-bottom: 5px;
+	float: left;
+	clear: both;
+}
+
 .msg, .msg-me {
 	background-color: #182533;
     width: max-content;
-	max-width: 60%;
+	max-width: 30em;
     border-radius: 5px 20px 20px 5px;
     overflow-wrap: break-word;
     padding: 10px;
@@ -125,6 +135,7 @@ img {
     margin-left: 10px;
     margin-right: 10px;
     white-space: pre-wrap;
+    clear: both;
 }
 
 .msg-me {
@@ -144,28 +155,26 @@ img {
 	font-size: 90%;
 }
 
-.msg-wrapper {
-	clear: both;
-}
-
-.avatar, .avatar-me {
+.avatar-container {
 	position: sticky;
 	top: 0;
+	display: inline-block;
+	float: left;
+}
+
+.avatar-container img {
+	border-radius: 50%;
+}
+
+.avatar {
 	border-radius: 50%;
 	display: inline-block;
 	float: left;
 }
 
-.avatar-me {
-	float: right;
-}
-
-#msg-box .avatar {
-	margin-left: 10px;
-}
-
-#msg-box .avatar-me {
-	margin-right: 10px;
+.msg-chain {
+	display: inline-block;
+	float: left;
 }
 
 .chat-container {
@@ -275,8 +284,8 @@ img {
 	height: calc(100vh - 125px);
 	width: calc(100vw - 330px);
 	overflow-y: scroll;
-	display: flex;
-	flex-direction: column;
+	/*display: flex;*/
+	/*flex-direction: column;*/
 }
 
 #before-start {
@@ -398,6 +407,7 @@ img {
     padding: 0 5px;
     transition: transform 0.2s ease-in-out;
     transform-origin: center;
+    color: #17212b;
 }
 
 .arrow-down {
@@ -411,9 +421,9 @@ img {
 .msg-tail {
     z-index: -1;
     content: '';
-    top: 16px;
-    left: 22px;
-    position: relative;
+    top: 10px;
+    left: 12px;
+    position: absolute;
     border: 0px solid;
     display: block;
     width: 38px;
@@ -427,9 +437,9 @@ img {
 .msg-tail-me {
     z-index: -1;
     content: '';
-    top: 16px;
-    left: calc(100vw - 330px - 60px);;
-    position: relative;
+    top: 10px;
+    right: 12px;;
+    position: absolute;
     border: 0px solid;
     display: block;
     width: 38px;
