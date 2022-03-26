@@ -1,7 +1,7 @@
 const { windowEmit } = require("./window");
 const { Client } = require("oicq");
 const { User, Group } = require("oicq");
-const { getTime, unescapeHtml, removeNewLines, messageScroll, lazyImageLoad, lazyImageError } = require("./utils");
+const { getTime, unescapeHtml, removeNewLines, messageScroll, lazyImageLoad, lazyImageError, scrollMessageBoxToBottom } = require("./utils");
 
 
 function addNewChat(id, group, name, time, raw_message, last_name, avatar_url, unread, callback) {
@@ -127,7 +127,7 @@ function setChatFromCache(id, group) {
 		img.addEventListener("error", lazyImageError);
 		img.addEventListener("load", lazyImageLoad);
 	}
-	msg_box.scrollTop = msg_box.scrollHeight;
+	scrollMessageBoxToBottom(false);
 }
 exports.setChatFromCache = setChatFromCache;
 
@@ -149,12 +149,14 @@ Client.prototype.addChatList = function (chats) {
 		const avatar_url = this.getAvatar(id, group);
 		const raw_message = chat.last;
 		const last_name = chat.last_name;
-		const unread=chat.unread;
+		const unread = chat.unread;
+		const last_id = chat.last_id;
 		windowEmit('set-chat', id, name, time, raw_message, last_name, group, avatar_url, unread);
 		chat_list.push({
 			id: id,
 			group: group,
-			unread: unread
+			unread: unread,
+			last_id: last_id
 		});
 	}
 	return chat_list;

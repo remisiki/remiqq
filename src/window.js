@@ -1,4 +1,5 @@
 const { BrowserWindow } = require('electron');
+// const { imgWindow } = require('../App');
 
 function windowEmit(signal, ...data) {
 	try {
@@ -10,3 +11,8 @@ function windowEmit(signal, ...data) {
 	}
 }
 exports.windowEmit = windowEmit;
+
+// function newImgWindow(src) {
+// 	imgWindow(src).show();
+// }
+// exports.newImgWindow = newImgWindow;

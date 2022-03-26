@@ -15,7 +15,7 @@ const editText = (selector, text) => {
     }
 }
 
-function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, hide = false, top = true) {
+function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, hide = false, top = true, merge = false) {
 
 	const title = document.createElement("div");
 	title.className = "msg-title";
@@ -31,24 +31,26 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 
 	const msg_container = document.createElement("div");
 	msg_container.className = `msg${(from_me) ? "-me" : ""}`;
-	msg_container.appendChild(title);
+	if (!merge) {
+		msg_container.appendChild(title);
+	}
 
 	for (const dom of doms) {
 		switch (dom.type) {
 			case "text":
-				const msg_text = document.createElement("div");
-				msg_text.innerText = unescapeHtml(dom.text);
-				msg_text.innerHTML = msg_text.innerHTML.replace(/<br>/g, '\u000a');
-				msg_container.appendChild(msg_text);
+				// const msg_text = document.createElement("div");
+				// msg_text.innerText = unescapeHtml(dom.text);
+				// msg_text.innerHTML = msg_text.innerHTML.replace(/<br>/g, '\u000a');
+				msg_container.innerHTML += unescapeHtml(dom.text).replace(/<br>/g, '\u000a');
 				break;
 			case "image":
 				const msg_img = document.createElement("img");
+				const img_src = getImgSrcFromSegment(dom);
 				msg_img.className = "msg-img";
 				msg_img.loading = "lazy";
-				msg_img.src = getImgSrcFromSegment(dom);
+				msg_img.src = img_src;
 				msg_container.classList.add("lazyImageWaiting");
-		        msg_img.addEventListener("error", lazyImageError);
-				msg_img.addEventListener("load", lazyImageLoad);
+				msg_img.addEventListener("click", () => window.open(img_src, '_blank'));
 				msg_container.appendChild(msg_img);
 				break;
 			default:
@@ -59,6 +61,7 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 	let img_only = false;
 	if (doms.every(x => x.type === "image")) {
 		msg_container.className += " msg-transparent";
+		msg_container.style.padding = 0;
 		img_only = true;
 	}
 
@@ -67,9 +70,17 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 	const avatar = document.createElement("img");
 	avatar.className = `avatar${(from_me) ? "-me" : ""}`;
 	avatar.src = avatar_url;
+	if (merge) {
+		avatar.style.opacity = 0;
+	}
 
 	const msg_wrapper = document.createElement("div");
 	msg_wrapper.className = "msg-wrapper";
+	const msg_tail = document.createElement("div");
+	msg_tail.className = `msg-tail${(from_me) ? "-me" : ""}`;
+	if (!merge && !img_only) {
+		msg_wrapper.appendChild(msg_tail);
+	}
 	msg_wrapper.appendChild(avatar);
 	msg_wrapper.appendChild(msg_container);
 
@@ -92,6 +103,11 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 	if (!hide) {
 		msg_box.style.display = "flex";
 	}
+
+	for (const msg_img of document.getElementById("msg-box").getElementsByClassName("msg-img")) {
+		msg_img.addEventListener("error", lazyImageError);
+		msg_img.addEventListener("load", lazyImageLoad);
+	}
 	
 }
 exports.addNewMessage = addNewMessage;
@@ -113,7 +129,7 @@ function clearMessage() {
 }
 exports.clearMessage = clearMessage;
 
-Client.prototype.sendMessage = async function (html, id, group, db) {
+Client.prototype.sendMessage = async function (html, id, group, db, chat_list) {
 	if (!html) return;
 	const user = (group) ? (new Group(this, id)) : (new User(this, id));
 	const doms = splitDomByImg(html);
@@ -139,10 +155,14 @@ Client.prototype.sendMessage = async function (html, id, group, db) {
 	const avatar_url = this.getAvatar();
 	const raw_message = getRawMessage(send_list);
 	const name = this.nickname;
-	windowEmit('set-message', send_list, name, time, true, avatar_url);
+	const search_item = {id: id, group: group, unread: 0};
+	const chat_data = chat_list.find(item => compareChat(item, search_item));
+	const merge_msg = (chat_data.last_id === this.uin);
+	chat_data.last_id = this.uin;
+	windowEmit('set-message', send_list, name, time, true, avatar_url, undefined, undefined, merge_msg);
 	windowEmit('update-chat', id, name, group, time, raw_message, undefined, 0);
 	windowEmit('cache-chat', id, group);
-	updateChatListData(db, id, group, "", msg_callback.time, raw_message, name);
+	updateChatListData(db, id, group, "", msg_callback.time, raw_message, name, this.uin);
 	dbUpdateUnread(db, id, group, "clear");
 }
 
@@ -167,6 +187,8 @@ Client.prototype.getHistoryById = async function (id, group) {
 
 Client.prototype.syncMessage = async function (db, id, group, chat_list) {
 	const history = await this.getHistoryById(id, group);
+	let search_item = {id: id, group: group, unread: 0};
+	const chat_data = chat_list.find(item => compareChat(item, search_item));
 	windowEmit('clear');
 	for (let i = 0; i < history.num; i ++) {
 		// console.log(history.msgs[i]);
@@ -179,23 +201,28 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list) {
 		const from_me = (sender_id === this.uin);
 		const avatar_url = this.getAvatar(sender_id);
 		const group_avatar_url = (group) ? this.getAvatar(id, true) : null;
+		let merge_msg = (chat_data.last_id === sender_id);
+		if (i === 0) {
+			merge_msg = false;
+		}
 		if (i === (history.num - 1)) {
-			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, false);
+			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, false, undefined, merge_msg);
 			const name = (group) ? null : await this.getName(id);
-			const search_item = {id: id, group: group, unread: 0};
-			const chat_data = chat_list.find(item => compareChat(item, search_item));
 			if (!chat_data) {
 				windowEmit('set-chat', id, name ?? msg.group_name, time, raw_message, sender_name, group, group_avatar_url ?? avatar_url, 0);
+				search_item.last_id = sender_id;
 				chat_list = chat_list.concat([search_item]);
 			}
 			else if (chat_list) {
 				windowEmit('update-chat', id, sender_name, group, time, raw_message, undefined, 0);
 				chat_data.unread = 0;
+				chat_data.last_id = sender_id;
 			}
-			updateChatListData(db, id, group, name ?? msg.group_name, msg.time, raw_message, sender_name);
+			updateChatListData(db, id, group, name ?? msg.group_name, msg.time, raw_message, sender_name, sender_id);
 		}
 		else {
-			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, true);
+			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, true, undefined, merge_msg);
+			chat_data.last_id = sender_id;
 		}
 	}
 	windowEmit('scroll-message', false);
@@ -252,8 +279,9 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 	if (in_section) {
 		windowEmit('get-view-height');
 		ipcMain.once('is-at-up', (_e, is_at_up) => {
-			const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: (is_at_up) ? 1 : 0};
+			const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: (is_at_up) ? 1 : 0, last_id: sender_id};
 			const chat_data = chat_list.find(item => compareChat(item, search_item));
+			let merge_msg = false;
 			if (!chat_data) {
 				windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, name, msg_is_group, group_avatar_url ?? avatar_url, (is_at_up) ? 1 : 0);
 				chat_list = chat_list.concat([search_item]);
@@ -267,18 +295,20 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 					chat_data.unread ++;
 					windowEmit('set-scroll-unread', chat_data.unread);
 				}
+				merge_msg = (chat_data.last_id === sender_id);
+				chat_data.last_id = sender_id;
 			}
-			windowEmit('set-message', e.message, name, time, from_me, avatar_url, undefined, false);
+			windowEmit('set-message', e.message, name, time, from_me, avatar_url, undefined, false, merge_msg);
 			if (!is_at_up) {
 				windowEmit('scroll-message');
 			}
 			windowEmit('cache-chat', group_id ?? sender_id, msg_is_group);
-			updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name);
+			updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name, sender_id);
 			dbUpdateUnread(db, group_id ?? sender_id, msg_is_group, (is_at_up) ? "plus" : "clear");
 		});
 	}
 	else {
-		const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: 1};
+		const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: 1, last_id: sender_id};
 		const chat_data = chat_list.find(item => compareChat(item, search_item));
 		if (!chat_data) {
 			windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, name, msg_is_group, group_avatar_url ?? avatar_url, 1);
@@ -288,7 +318,7 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 			windowEmit('update-chat', group_id ?? sender_id, name, msg_is_group, time, e.raw_message, undefined, 1);
 			chat_data.unread ++;
 		}
-		updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name);
+		updateChatListData(db, group_id ?? sender_id, msg_is_group, group_name ?? name, e.time, e.raw_message, name, sender_id);
 		dbUpdateUnread(db, group_id ?? sender_id, msg_is_group, "plus");
 	}
 }
@@ -305,13 +335,14 @@ Client.prototype.syncMessageFromOtherDevice = async function(e, db, current_uid,
 	const receiver_avatar_url = this.getAvatar(receiver_id);
 	const group_avatar_url = (msg_is_group) ? this.getAvatar(group_id, true) : null;
 	const in_section = (current_uid === (group_id ?? receiver_id));
+	const search_item = {id: group_id ?? receiver_id, group: msg_is_group, unread: 0, last_id: this.uin};
+	const chat_data = chat_list.find(item => compareChat(item, search_item));
+	const merge_msg = (chat_data.last_id === this.uin);
 	windowEmit('update-chat', group_id ?? receiver_id, name, msg_is_group, time, e.raw_message, undefined, 0);
 	if (in_section) {
-		windowEmit('set-message', e.message, name, time, true, avatar_url);
+		windowEmit('set-message', e.message, name, time, true, avatar_url, undefined, undefined, merge_msg);
 		windowEmit('cache-chat', group_id ?? receiver_id, msg_is_group);
 	}
-	const search_item = {id: group_id ?? receiver_id, group: msg_is_group, unread: 0};
-	const chat_data = chat_list.find(item => compareChat(item, search_item));
 	if (!chat_data) {
 		windowEmit('set-chat', group_id ?? receiver_id, group_name ?? receiver_name, time, e.raw_message, group_name ?? receiver_name, msg_is_group, group_avatar_url ?? receiver_avatar_url, (in_section) ? 0 : 1);
 		chat_list = chat_list.concat([search_item]);
@@ -319,8 +350,9 @@ Client.prototype.syncMessageFromOtherDevice = async function(e, db, current_uid,
 	else if (chat_list) {
 		windowEmit('update-chat', group_id ?? receiver_id, group_name ?? receiver_name, msg_is_group, time, e.raw_message, undefined, (in_section) ? 0 : 1);
 		chat_data.unread = 0;
+		chat_data.last_id = this.uin;
 	}
-	updateChatListData(db, group_id ?? receiver_id, msg_is_group, "", e.time, e.raw_message, name);
+	updateChatListData(db, group_id ?? receiver_id, msg_is_group, "", e.time, e.raw_message, name, this.uin);
 	dbUpdateUnread(db, (group_id ?? receiver_id), msg_is_group, "clear");
 }
 

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const sqlite3 = require("sqlite3");
 
-function updateChatListData(db, id, group, name = "", timestamp, last_message, last_name) {
+function updateChatListData(db, id, group, name = "", timestamp, last_message, last_name, last_id) {
 	let query;
 	const _name = name.replace(/"/g, "&quot;");
 	const _last_message = last_message.replace(/"/g, "&quot;");
@@ -11,7 +11,8 @@ function updateChatListData(db, id, group, name = "", timestamp, last_message, l
 			set 
 				time = ${timestamp}, 
 				last = "${_last_message}",
-				last_name = "${_last_name}"
+				last_name = "${_last_name}",
+				last_id = ${last_id}
 			where
 				id = ${id}
 			;`;
@@ -23,7 +24,8 @@ function updateChatListData(db, id, group, name = "", timestamp, last_message, l
 				name, 
 				time, 
 				last,
-				last_name
+				last_name,
+				last_id
 			) 
 			values
 			(
@@ -31,7 +33,8 @@ function updateChatListData(db, id, group, name = "", timestamp, last_message, l
 				"${_name}", 
 				${timestamp}, 
 				"${_last_message}",
-				"${_last_name}"
+				"${_last_name}",
+				${last_id}
 			) 
 			on conflict(id) 
 				do 
@@ -39,7 +42,8 @@ function updateChatListData(db, id, group, name = "", timestamp, last_message, l
 						name = "${_name}", 
 						time = ${timestamp}, 
 						last = "${_last_message}",
-						last_name = "${_last_name}"
+						last_name = "${_last_name}",
+						last_id = ${last_id}
 			;`;
 	}
 	db.run(query);
@@ -70,14 +74,16 @@ function dbInit(account) {
 			'time integer, ' +
 			'last text, ' +
 			'unread integer default 0, ' +
-			'last_name text)');
+			'last_name text, ' +
+			'last_id integer)');
 		db.run('create table if not exists group(' + 
 			'id integer not null unique, ' + 
 			'name text, ' + 
 			'time integer, ' +
 			'last text, ' +
 			'unread integer default 0, ' +
-			'last_name text)');
+			'last_name text, ' +
+			'last_id integer)');
 	}
 
 	return db;

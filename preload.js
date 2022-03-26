@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer, BrowserWindow } = require('electron');
 const { addNewMessage, clearMessage } = require("./src/message");
 const { addNewChat, addMyAvatar, updateChat, cacheChat, chatIsCached, setChatFromCache } = require("./src/chat");
 const { isAtUp, scrollMessageBoxToBottom, cacheUnread, decreaseUnread } = require("./src/utils");
+// const { newImgWindow } = require('./src/window');
 
 
 contextBridge.exposeInMainWorld('api', {
@@ -15,8 +16,11 @@ contextBridge.exposeInMainWorld('api', {
       decreaseUnread();
       ipcRenderer.send('mark-read');
     },
-    scrollToBottom: () => {
-      scrollMessageBoxToBottom();
+    scrollToBottom: (smooth) => {
+      scrollMessageBoxToBottom(smooth);
+    },
+    openImg: (src) => {
+      newImgWindow(src);
     }
 })
 
@@ -30,8 +34,8 @@ window.addEventListener('DOMContentLoaded', () => {
     .on('set-chat', (e, id, name, time, raw_message, last_name, group, avatar_url, unread) => {
         addNewChat(id, group, name, time, raw_message, last_name, avatar_url, unread, () => ipcRenderer.send('sync-message', [id, group]));
       })
-    .on('set-message', (e, doms, name, time, from_me, avatar_url, hide, top) => {
-        addNewMessage(doms, name, time, from_me, avatar_url, hide, top);
+    .on('set-message', (e, doms, name, time, from_me, avatar_url, hide, top, merge) => {
+        addNewMessage(doms, name, time, from_me, avatar_url, hide, top, merge);
       })
     .on('update-chat', (e, id, name, group, time, raw_message, top, unread) => {
         updateChat(id, name, group, time, raw_message, top, unread);
@@ -57,6 +61,9 @@ window.addEventListener('DOMContentLoaded', () => {
       })
     .on('set-scroll-unread', (e, unread) => {
         cacheUnread(unread);
+      })
+    .on('new-window', (e, url) => {
+        window.open(url, '_blank');;
       })
     ;
 })

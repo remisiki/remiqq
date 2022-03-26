@@ -41,7 +41,7 @@ if (require.main === module) {
 		// .login(process.env.SUB_PASSWORD_KEY);
 		.login(process.env.PASSWORD_KEY);
 
-	ipcMain.on("send-message", (e, html) => bot.sendMessage(html, current_uid, current_is_group, db));
+	ipcMain.on("send-message", (e, html) => bot.sendMessage(html, current_uid, current_is_group, db, chat_list));
 	ipcMain.on("mark-read", (e) => {
 		bot.markRead(db, current_uid, current_is_group, chat_list);
 	});
