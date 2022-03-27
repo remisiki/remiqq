@@ -56,11 +56,28 @@ function dbQueryResultSet(db, query) {
 		    if (err) {
 		    	reject(err);
 		    }
-		    resolve(JSON.parse(JSON.stringify(rows)));
+		    try {
+			    resolve(JSON.parse(JSON.stringify(rows)));
+			}
+			catch (e) {
+				reject(e);
+			}
 	    });
 	});
 }
 exports.dbQueryResultSet = dbQueryResultSet;
+
+function dbQuery(db, query) {
+	return new Promise((resolve, reject) => {
+		db.all(query, (err) => {
+		    if (err) {
+		    	reject(err);
+		    }
+		    resolve(true);
+	    });
+	});
+}
+exports.dbQuery = dbQuery;
 
 function dbInit(account) {
 	const dbFile = `./data/${account}/data.db`;
@@ -132,3 +149,57 @@ async function dbUpdateUnread(db, id, group, type = "clear") {
 	db.run(query);
 }
 exports.dbUpdateUnread = dbUpdateUnread;
+
+function dbStoreMessage(db, id, msg_id, time, segments, from_me) {
+	const raw_message = JSON.stringify(segments).replace(/"/g, "&quot;");
+	db.serialize(() => {
+	    db.run(`
+				create table if not exists "${id}"(
+					msg_id text not null unique,  
+					time integer, 
+					msg text,
+					from_me bit
+				);
+			`);
+	    db.run(`
+	    		insert or replace into "${id}" 
+	    		values(
+	    			"${msg_id}", 
+	    			${time}, 
+	    			"${raw_message}",
+	    			"${from_me}"
+	    		) 
+	    	`);
+	});
+}
+exports.dbStoreMessage = dbStoreMessage;
+
+async function dbReadMessage(db, id, num, time) {
+	let query;
+	if (!num) {
+		query = `
+			select * from "${id}"
+			order by "time" desc
+		`;
+	}
+	else {
+		query = `
+			select * from "${id}" 
+			${(time) ? `where "time" < ${time}` : ""} 
+			order by "time" desc 
+			limit ${num}
+		`;
+	}
+	try {
+		let result = await dbQueryResultSet(db, query);
+		for (let i = 0; i < result.length; i ++) {
+			result[i].msg = JSON.parse(result[i].msg.replace(/&quot;/g, '\"'));
+		}
+		return result.reverse();
+	}
+	catch (e) {
+		console.log(e);
+		return null;
+	}
+}
+exports.dbReadMessage = dbReadMessage;

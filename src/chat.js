@@ -168,7 +168,9 @@ Client.prototype.addChatList = function (chats) {
 			group: group,
 			unread: unread,
 			last_id: last_id,
-			top_time: -1
+			top_time: undefined,
+			seq_reserved: undefined,
+			first_record: undefined
 		});
 	}
 	return chat_list;

@@ -59,7 +59,7 @@ if (require.main === module) {
 			else {
 				windowEmit('fetch-cache', ...args);
 				for (const chat of chat_list) {
-					chat.top_time = chat.seq_reserced;
+					chat.top_time = chat.seq_reserved;
 				}
 			}
 		});

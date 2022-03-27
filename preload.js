@@ -71,5 +71,8 @@ window.addEventListener('DOMContentLoaded', () => {
     .on('insert-message', (e, html) => {
         insertMessage(html);
       })
+    .on('insert-separate', (e) => {
+        insertSeparate();
+      })
     ;
 })

@@ -5,7 +5,7 @@ const { windowEmit } = require("./window");
 const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces, compareChat, getRawMessage, removeNewLines, messageScroll, lazyImageLoad, lazyImageError, scrollMessageBoxToBottom } = require("./utils");
 const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromDom, getImgSrcFromSegment } = require("./image");
 const { JSDOM } = require('jsdom');
-const { updateChatListData, dbUpdateUnread } = require("./sqlite");
+const { updateChatListData, dbUpdateUnread, dbStoreMessage, dbReadMessage } = require("./sqlite");
 const { ipcMain } = require('electron');
 
 function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, hide = false, top = true, merge = false, jsdom) {
@@ -139,7 +139,7 @@ function insertMessage(html) {
 exports.insertMessage = insertMessage;
 
 function clearMessage() {
-	const msg_box = document.querySelector('#msg-box');
+	const msg_box = document.getElementById('msg-box');
 	msg_box.innerHTML = "";
 	const before_start = document.createElement("div");
 	before_start.id = "before-start";
@@ -184,6 +184,9 @@ Client.prototype.sendMessage = async function (html, id, group, db, chat_list) {
 	windowEmit('cache-chat', id, group);
 	updateChatListData(db, id, group, "", msg_callback.time, raw_message, name, this.uin);
 	dbUpdateUnread(db, id, group, "clear");
+	if (!group) {
+		dbStoreMessage(db, id, msg_callback.message_id, msg_callback.time, send_list, true);
+	}
 }
 
 Client.prototype.getHistoryById = async function (id, group, seq) {
@@ -208,13 +211,51 @@ Client.prototype.getHistoryById = async function (id, group, seq) {
 Client.prototype.syncMessage = async function (db, id, group, chat_list, sync_more = false) {
 	let history;
 	let search_item = {id: id, group: group, unread: 0};
-	const chat_data = chat_list.find(item => compareChat(item, search_item));
+	let chat_data = chat_list.find(item => compareChat(item, search_item));
+	if (chat_data.first_record >= chat_data.top_time) {
+		console.log("stop");
+		return;
+	}
 	if (sync_more) {
-		if (chat_data?.top_time && chat_data.top_time > 0) {
+		if (chat_data?.top_time) {
 			history = await this.getHistoryById(id, group, chat_data.top_time);
 			if (!history.num) {
-				console.log("No more history available.");
-				return;
+				if (!group) {
+					const cache_history = await dbReadMessage(db, id, 20, chat_data.top_time);
+					if (cache_history) {
+						if (!cache_history.length) {
+							chat_data.first_record = chat_data.top_time;
+							return;
+						}
+						history.num = cache_history.length;
+						history.msgs = [];
+						history.names = [];
+						for (let i = 0; i < history.num; i ++) {
+							const cache = cache_history[i];
+							const msg = cache.msg;
+							const from_me = (cache.from_me === "true");
+							const sender_name = (from_me) ? this.nickname : await this.getName(id);
+							const time = cache.time;
+							const from_id = (from_me) ? this.uin : id;
+							const history_msg = {
+								from_id: from_id,
+								time: time,
+								message: msg
+							};
+							history.msgs.push(history_msg);
+							history.names.push(sender_name);
+						}
+					}
+					else {
+						console.log("Database error.");
+						return;
+					}
+				}
+				else {
+					console.log("No more group messages.");
+					chat_data.first_record = chat_data.top_time;
+					return;
+				}
 			}
 			let last_id, top_time;
 			const { document } = (new JSDOM(`...`)).window;
@@ -239,24 +280,62 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list, sync_mo
 				}
 				last_id = sender_id;
 				document.getElementById("msg-box").innerHTML = addNewMessage(doms, sender_name, time, from_me, avatar_url, false, undefined, merge_msg, document);
+				if (!group) {
+					dbStoreMessage(db, id, msg.message_id, msg.time, doms, from_me);
+				}
 			}
 			windowEmit('insert-message', document.getElementById("msg-box").innerHTML);
 			chat_data.top_time = top_time;
+			return;
 		}
 		else {
 			console.log(chat_data);
+			return;
 		}
-		return;
 	}
 	else {
 		history = await this.getHistoryById(id, group);
 		windowEmit('clear');
 	}
-	let top_time;
+	let top_time, last_cache_time, cache_top_time;
+	if (!group) {
+		const segments = await dbReadMessage(db, id, 20);
+		if (segments) {
+			last_cache_time = segments[segments.length - 1].time;
+			const name = await this.getName(id);
+			for (let i = 0; i < segments.length; i ++) {
+				const segment = segments[i];
+				const time = getTime(segment.time);
+				const doms = segment.msg;
+				const from_me = (segment.from_me === "true");
+				const sender_id = (from_me) ? this.uin : id;
+				const avatar_url = this.getAvatar(sender_id);
+				const sender_name = (from_me) ? this.nickname : name;
+				let merge_msg;
+				if (!chat_data) {
+					const raw_message = getRawMessage(doms);
+					windowEmit('set-chat', id, name, time, raw_message, sender_name, false, this.getAvatar(id), 0);
+					search_item.last_id = sender_id;
+					search_item.top_time = segment.time;
+					search_item.seq_reserved = cache_top_time;
+					chat_list = chat_list.concat([search_item]);
+					chat_data = chat_list.find(item => compareChat(item, search_item));
+				}
+				merge_msg = (chat_data.last_id === sender_id);
+				if (i === 0) {
+					merge_msg = false;
+					cache_top_time = segment.time;
+				}
+				windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, (i !== segments.length - 1), undefined, merge_msg);
+				chat_data.last_id = sender_id;
+			}
+			windowEmit('scroll-message', false);
+		}
+	}
 	for (let i = 0; i < history.num; i ++) {
-		// console.log(history.msgs[i]);
 		const msg = history.msgs[i];
 		const sender_name = history.names[i];
+		const name = (group) ? msg.group_name : sender_name;
 		const doms = msg.message;
 		const raw_message = removeNewLines(msg.raw_message);
 		const time = getTime(msg.time);
@@ -264,33 +343,45 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list, sync_mo
 		const from_me = (sender_id === this.uin);
 		const avatar_url = this.getAvatar(sender_id);
 		const group_avatar_url = (group) ? this.getAvatar(id, true) : null;
+		if (!chat_data) {
+			windowEmit('set-chat', id, name, time, raw_message, sender_name, group, group_avatar_url ?? avatar_url, 0);
+			search_item.last_id = sender_id;
+			search_item.top_time = msg.time;
+			search_item.seq_reserved = msg.time;
+			chat_list = chat_list.concat([search_item]);
+			chat_data = chat_list.find(item => compareChat(item, search_item));
+		}
 		let merge_msg = (chat_data.last_id === sender_id);
 		if (i === 0) {
 			merge_msg = false;
 			top_time = (group) ? msg.seq : msg.time;
 		}
+		if (!group && last_cache_time) {
+			if (i === 0 && last_cache_time < msg.time) {
+				windowEmit('clear');
+			}
+			else if (last_cache_time >= msg.time) {
+				top_time = cache_top_time;
+				chat_data.top_time = top_time;
+				chat_data.seq_reserved = top_time;
+				continue;
+			}
+		}
 		if (i === (history.num - 1)) {
 			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, false, undefined, merge_msg);
-			const name = (group) ? null : await this.getName(id);
-			if (!chat_data) {
-				windowEmit('set-chat', id, name ?? msg.group_name, time, raw_message, sender_name, group, group_avatar_url ?? avatar_url, 0);
-				search_item.last_id = sender_id;
-				search_item.top_time = top_time;
-				search_item.seq_reserced = top_time;
-				chat_list = chat_list.concat([search_item]);
-			}
-			else if (chat_list) {
-				windowEmit('update-chat', id, sender_name, group, time, raw_message, undefined, 0);
-				chat_data.unread = 0;
-				chat_data.last_id = sender_id;
-				chat_data.top_time = top_time;
-				chat_data.seq_reserced = top_time;
-			}
+			windowEmit('update-chat', id, sender_name, group, time, raw_message, undefined, 0);
+			chat_data.unread = 0;
+			chat_data.last_id = sender_id;
+			chat_data.top_time = top_time;
+			chat_data.seq_reserved = top_time;
 			updateChatListData(db, id, group, name ?? msg.group_name, msg.time, raw_message, sender_name, sender_id);
 		}
 		else {
 			windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, true, undefined, merge_msg);
 			chat_data.last_id = sender_id;
+		}
+		if (!group) {
+			dbStoreMessage(db, id, msg.message_id, msg.time, doms, from_me);
 		}
 	}
 	windowEmit('scroll-message', false);
@@ -344,6 +435,9 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 	const avatar_url = this.getAvatar(sender_id);
 	const group_avatar_url = (msg_is_group) ? this.getAvatar(group_id, true) : null;
 	const in_section = (current_uid === (group_id ?? sender_id));
+	if (!msg_is_group) {
+		dbStoreMessage(db, sender_id, e.message_id, e.time, e.message, from_me);
+	}
 	if (in_section) {
 		windowEmit('get-view-height');
 		ipcMain.once('is-at-up', (_e, is_at_up) => {
@@ -376,7 +470,7 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 		});
 	}
 	else {
-		const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: 1, last_id: sender_id, top_time: (msg_is_group) ? e.seq : e.time, seq_reserced: (msg_is_group) ? e.seq : e.time};
+		const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: 1, last_id: sender_id, top_time: (msg_is_group) ? e.seq : e.time, seq_reserved: (msg_is_group) ? e.seq : e.time};
 		const chat_data = chat_list.find(item => compareChat(item, search_item));
 		if (!chat_data) {
 			windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, name, msg_is_group, group_avatar_url ?? avatar_url, 1);
@@ -422,6 +516,9 @@ Client.prototype.syncMessageFromOtherDevice = async function(e, db, current_uid,
 	}
 	updateChatListData(db, group_id ?? receiver_id, msg_is_group, "", e.time, e.raw_message, name, this.uin);
 	dbUpdateUnread(db, (group_id ?? receiver_id), msg_is_group, "clear");
+	if (!msg_is_group) {
+		dbStoreMessage(db, id, e.message_id, e.time, e.message, true);
+	}
 }
 
 Client.prototype.markRead = function(db, current_uid, group, chat_list) {
