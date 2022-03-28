@@ -138,9 +138,6 @@ function lazyImageError(e) {
 	const parent = e.currentTarget.parentNode;
 	parent.classList.remove("lazyImageWaiting");
 	parent.classList.add("lazyImageError");
-	setTimeout(() => {
-		parent.classList.add("lazyImageErrorShow");
-	}, 10);
 }
 exports.lazyImageError = lazyImageError;
 

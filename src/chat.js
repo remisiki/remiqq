@@ -162,7 +162,7 @@ Client.prototype.addChatList = function (chats) {
 		const last_name = chat.last_name;
 		const unread = chat.unread;
 		const last_id = chat.last_id;
-		windowEmit('set-chat', id, name, time, raw_message, last_name, group, avatar_url, unread);
+		windowEmit('main', 'set-chat', id, name, time, raw_message, last_name, group, avatar_url, unread);
 		chat_list.push({
 			id: id,
 			name: name,

@@ -1,13 +1,13 @@
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { getImgUrlFromSrc } = require('./image');
 
 let windows = {imgWindowCount: 0};
-function windowEmit(signal, ...data) {
+function windowEmit(name, signal, ...data) {
 	try {
 		// const mainWindow = BrowserWindow.getAllWindows()[0];
-		const mainWindow = windows.main;
-		mainWindow.webContents.send(signal, ...data);
+		const window = windows[name];
+		window.webContents.send(signal, ...data);
 	}
 	catch (e) {
 		console.error(e);
@@ -29,6 +29,7 @@ const mainWindow = () => {
 	window.on("closed", () => {
 	    delete windows.main;
 	});
+	window.on('ready-to-show', window.show);
 
   // ipcMain.on('set-new-message', (event, msg) => {
   //   const webContents = event.sender
@@ -43,18 +44,19 @@ const mainWindow = () => {
 exports.mainWindow = mainWindow;
 
 const imgWindow = (src) => {
-    const window = new BrowserWindow({parent: mainWindow});
-    windows[`img${windows.imgWindowCount}`] = window;
+    const window = new BrowserWindow({
+    	parent: mainWindow,
+    	backgroundColor: "#0e1621",
+	    webPreferences: {
+		}
+	});
+	const index = windows.imgWindowCount;
+    windows[`img${index}`] = window;
     windows.imgWindowCount ++;
     window.on("closed", () => {
         delete windows[`img${windows.imgWindowCount}`];
         windows.imgWindowCount --;
     });
-    try {
-	    window.loadURL(getImgUrlFromSrc(src));
-    }
-    catch (e) {
-    	console.log(e);
-    }
+    window.loadURL(src);
 }
 exports.imgWindow = imgWindow;

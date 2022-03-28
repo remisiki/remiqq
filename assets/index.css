@@ -52,7 +52,15 @@ img {
 	cursor: pointer;
 }
 
-.lazyImageError img,
+.lazyImageError img {
+	content: url('error.png');
+	opacity: 1;
+	user-select: none;
+	-webkit-user-drag: none;
+	width: 20px;
+	height: 20px;
+}
+
 .lazyImageWaiting img {
 	opacity: 0;
 	transition: none;

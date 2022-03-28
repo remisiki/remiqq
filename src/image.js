@@ -14,6 +14,7 @@ const { imgWindow } = require("./window");
 const path = require('path');
 const fs = require('fs');
 const { segment } = require("oicq/lib/message/elements");
+const { JSDOM } = require('jsdom');
 
 function extractUrlFromMessage(msg) {
 	let img_urls = [];
@@ -74,13 +75,19 @@ function getImgSrcFromSegment(segment) {
 }
 exports.getImgSrcFromSegment = getImgSrcFromSegment;
 
+function fsRead(path) {
+	return new Promise((resolve, reject) => {
+		fs.readFile(path, (err, buffer) => {
+		    if (err) {
+		    	reject(err);
+		    }
+		    resolve(buffer);
+	    });
+	});
+}
+
 function createFileFromBase64(base64, id) {
-    const bin = atob(base64);
-    let buffer = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i ++) {
-        buffer[i] = bin.charCodeAt(i);
-    }
-    buffer = Buffer.from(buffer.buffer);
+    const buffer = createBufferFromBase64(base64);
     let file_name = `data/${id}/cache`;
     if (!fs.existsSync(file_name)){
 	    fs.mkdirSync(file_name, { recursive: true });
@@ -90,6 +97,16 @@ function createFileFromBase64(base64, id) {
     file_name = path.resolve(file_name);
     return file_name;
 };
+
+function createBufferFromBase64(base64) {
+	const bin = atob(base64);
+    let buffer = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i ++) {
+        buffer[i] = bin.charCodeAt(i);
+    }
+    buffer = Buffer.from(buffer.buffer);
+    return buffer;
+}
 
 function getImgSrcFromDom(dom) {
 	let src = SRC_REGEX.exec(dom);
@@ -163,7 +180,55 @@ function isImgSrc(str) {
 }
 exports.isImgSrc = isImgSrc;
 
+function isHttp(str) {
+	const is_http_s = IS_HTTP_S.exec(str);
+	IS_HTTP_S.exec("");
+	return (is_http_s) ? true : false;
+}
+
+function isBase64(str) {
+	const is_base64 = IS_BASE64.exec(str);
+	IS_BASE64.exec("");
+	return (is_base64) ? true : false;
+}
+
+function isFile(str) {
+	const is_file = IS_FILE.exec(str);
+	IS_FILE.exec("");
+	return (is_file) ? true : false;
+}
+
 function imgSrcToDom(src) {
 	return `<img src="${src}" />`;
 }
 exports.imgSrcToDom = imgSrcToDom;
+
+async function getBase64FromUrl(src) {
+	var request = require('request').defaults({ encoding: null });
+	let base64_data;
+	await request.get(src, (error, response, body) => {
+	    if (!error && response.statusCode == 200) {
+	        base64_data = "data:" + response.headers["content-type"] + ";base64," + Buffer.from(body).toString('base64');
+	    }
+	});
+	return base64_data;
+}
+exports.getBase64FromUrl = getBase64FromUrl;
+
+async function getBufferFromUrl(src) {
+	let buffer;
+	if (isHttp(src)) {
+		const axios = require('axios');
+		const response = await axios.get(src, {responseType: 'arraybuffer'});
+		buffer = Buffer.from(response.data, "utf-8");
+	}
+	else if (isBase64(src)) {
+		buffer = createBufferFromBase64(src);
+	}
+	else if (isFile(src)) {
+		console.log(src);
+		buffer = await fsRead(src.replace(FILE_PREFIX, ''));
+	}
+	return buffer;
+}
+exports.getBufferFromUrl = getBufferFromUrl;

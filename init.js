@@ -3,6 +3,7 @@ const BASE64_REGEX = /.*base64,(.*)/g;
 const SRC_REGEX = /src="(.*?)"/g;
 const IS_HTTP_S = /(^https?:\/\/.*)/g;
 const IS_BASE64 = /^base64:\/\/(.*)/g;
+const IS_FILE = /^file:\/\/.*/g;
 const BASE64_PREFIX = "data:image/png;base64,";
 
 function htmlToPlainText(html) {
@@ -120,10 +121,12 @@ function handleKey(e) {
 function isImgSrc(str) {
 	const is_http_s = IS_HTTP_S.exec(str);
 	const is_base64 = IS_BASE64.exec(str);
+	const is_file = IS_FILE.exec(str);
 	// Reset regex pointers
 	IS_HTTP_S.exec("");
 	IS_BASE64.exec("");
-	return (is_http_s || is_base64);
+	IS_FILE.exec("");
+	return (is_http_s || is_base64 || is_file);
 }
 
 function imgSrcToDom(src) {
@@ -182,7 +185,7 @@ function handleScroll(e) {
 	}
 }
 
-document.getElementById("send-box").addEventListener('paste', handlePaste, false);
+document.getElementById("send-box").addEventListener('paste', handlePaste);
 document.getElementById("send-box").addEventListener('drop', handleDrop);
 document.getElementById("send-box").addEventListener('dragover', (e) => {
 	e.dataTransfer.setData('text', 'copy');

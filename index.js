@@ -47,7 +47,7 @@ if (require.main === module) {
 		bot.markRead(db, current_uid, current_is_group, chat_list);
 	});
 	ipcMain.on("sync-message", (e, args) => {
-		windowEmit('check-cache', ...args);
+		windowEmit('main', 'check-cache', ...args);
 		current_uid = args[0];
 		current_is_group = args[1];
 		ipcMain.once('is-cached', async (_e, is_cached) => {
@@ -55,12 +55,12 @@ if (require.main === module) {
 			const chat_data = chat_list.find(item => compareChat(item, search_item));
 			const unread = chat_data.unread;
 			const name = chat_data.name;
-			windowEmit('set-chat-name', name);
+			windowEmit('main', 'set-chat-name', name);
 			if (!is_cached || unread) {
 				bot.syncMessage(db, ...args, chat_list);
 			}
 			else {
-				windowEmit('fetch-cache', ...args);
+				windowEmit('main', 'fetch-cache', ...args);
 				for (const chat of chat_list) {
 					chat.top_time = chat.seq_reserved;
 				}
@@ -84,7 +84,7 @@ if (require.main === module) {
 		let chat_list_group;
 		// Set my avatar
 		my_avatar_url = bot.getAvatar();
-		windowEmit('set-my-avatar', my_avatar_url);
+		windowEmit('main', 'set-my-avatar', my_avatar_url);
 		// Set all chat list avatar
 		try {
 			chat_list = chat_list.concat(
