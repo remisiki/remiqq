@@ -263,6 +263,17 @@ img {
 	top: 0;
 }
 
+#chat-name {
+	max-width: 60%;
+	white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow-x: hidden;
+}
+
+#chat-name:hover {
+	cursor: pointer;
+}
+
 #chat-list {
 	position: fixed;
 	left: 0;
@@ -279,7 +290,7 @@ img {
 
 #msg-box {
 	position: fixed;
-	right: 0;
+	left: 330px;
 	top: 60px;
 	height: calc(100vh - 125px);
 	width: calc(100vw - 330px);

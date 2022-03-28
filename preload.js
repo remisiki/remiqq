@@ -1,9 +1,9 @@
 const { contextBridge, ipcRenderer, BrowserWindow } = require('electron');
 
 const { addNewMessage, clearMessage, insertMessage } = require("./src/message");
-const { addNewChat, addMyAvatar, updateChat, cacheChat, chatIsCached, setChatFromCache } = require("./src/chat");
+const { addNewChat, addMyAvatar, updateChat, cacheChat, chatIsCached, setChatFromCache, setChatHeadName } = require("./src/chat");
 const { isAtUp, scrollMessageBoxToBottom, cacheUnread, decreaseUnread } = require("./src/utils");
-// const { newImgWindow } = require('./src/window');
+const { imgWindow } = require('./src/window');
 
 
 contextBridge.exposeInMainWorld('api', {
@@ -20,7 +20,8 @@ contextBridge.exposeInMainWorld('api', {
       scrollMessageBoxToBottom(smooth);
     },
     openImg: (src) => {
-      newImgWindow(src);
+      ipcRenderer.send('new-img-window', src)
+      // imgWindow(src);
     },
     syncMore: () => {
       ipcRenderer.send('sync-message-more');
@@ -37,8 +38,11 @@ window.addEventListener('DOMContentLoaded', () => {
     .on('set-chat', (e, id, name, time, raw_message, last_name, group, avatar_url, unread) => {
         addNewChat(id, group, name, time, raw_message, last_name, avatar_url, unread, () => ipcRenderer.send('sync-message', [id, group]));
       })
+    .on('set-chat-name', (e, name) => {
+        setChatHeadName(name);
+      })
     .on('set-message', (e, doms, name, time, from_me, avatar_url, hide, top, merge) => {
-        addNewMessage(doms, name, time, from_me, avatar_url, hide, top, merge);
+        addNewMessage(doms, name, time, from_me, avatar_url, hide, top, merge, undefined, ipcRenderer.send);
       })
     .on('update-chat', (e, id, name, group, time, raw_message, top, unread) => {
         updateChat(id, name, group, time, raw_message, top, unread);
@@ -57,7 +61,7 @@ window.addEventListener('DOMContentLoaded', () => {
         ipcRenderer.send('is-cached', is_cached);
       })
     .on('fetch-cache', (e, id, group) => {
-        setChatFromCache(id, group);
+        setChatFromCache(id, group, ipcRenderer.send);
       })
     .on('get-view-height', (e) => {
         ipcRenderer.send('is-at-up', isAtUp());
@@ -65,11 +69,8 @@ window.addEventListener('DOMContentLoaded', () => {
     .on('set-scroll-unread', (e, unread) => {
         cacheUnread(unread);
       })
-    .on('new-window', (e, url) => {
-        window.open(url, '_blank');
-      })
     .on('insert-message', (e, html) => {
-        insertMessage(html);
+        insertMessage(html, ipcRenderer.send);
       })
     .on('insert-separate', (e) => {
         insertSeparate();

@@ -128,7 +128,7 @@ function cacheChat(id, group) {
 }
 exports.cacheChat = cacheChat;
 
-function setChatFromCache(id, group) {
+function setChatFromCache(id, group, send) {
 	const unique_id =`${id}${(group) ? 'g' : 'p'}`;
 	const msg_box = document.getElementById("msg-box");
 	msg_box.innerHTML = window.sessionStorage.getItem(unique_id);
@@ -136,7 +136,7 @@ function setChatFromCache(id, group) {
 	for (const img of msg_img) {
 		img.addEventListener("error", lazyImageError);
 		img.addEventListener("load", lazyImageLoad);
-		img.addEventListener("click", () => window.open(img.src, '_blank'));
+		img.addEventListener("click", () => send('new-img-window', img.src));
 	}
 	scrollMessageBoxToBottom(false);
 }
@@ -165,6 +165,7 @@ Client.prototype.addChatList = function (chats) {
 		windowEmit('set-chat', id, name, time, raw_message, last_name, group, avatar_url, unread);
 		chat_list.push({
 			id: id,
+			name: name,
 			group: group,
 			unread: unread,
 			last_id: last_id,
@@ -197,3 +198,8 @@ function addMyAvatar(url) {
 	document.querySelector("#list-head").appendChild(my_avatar);
 }
 exports.addMyAvatar = addMyAvatar;
+
+function setChatHeadName(name) {
+	document.getElementById("chat-name").innerText = name;
+}
+exports.setChatHeadName = setChatHeadName;

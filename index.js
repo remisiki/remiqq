@@ -10,7 +10,7 @@ const { extractUrlFromMessage } = require("./src/image");
 const { contextBridge, ipcMain, BrowserWindow } = require('electron');
 const { createClient, User } = require("oicq");
 const core = require("oicq/lib/core");
-const { windowEmit } = require("./src/window");
+const { windowEmit, imgWindow } = require("./src/window");
 const { dbQueryResultSet, dbInit } = require("./src/sqlite");
 // const account = 2871789759;
 const account = 2635799987;
@@ -52,7 +52,10 @@ if (require.main === module) {
 		current_is_group = args[1];
 		ipcMain.once('is-cached', async (_e, is_cached) => {
 			const search_item = {id: current_uid, group: current_is_group};
-			const unread = chat_list.find(item => compareChat(item, search_item)).unread;
+			const chat_data = chat_list.find(item => compareChat(item, search_item));
+			const unread = chat_data.unread;
+			const name = chat_data.name;
+			windowEmit('set-chat-name', name);
 			if (!is_cached || unread) {
 				bot.syncMessage(db, ...args, chat_list);
 			}
@@ -117,6 +120,9 @@ if (require.main === module) {
 			.on("sync.read", e => {
 				console.log(e);
 			});
+	});
+	ipcMain.on('new-img-window', (e, src) => {
+		imgWindow(src);
 	});
 
 	const db = dbInit(account);

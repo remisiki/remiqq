@@ -1,14 +1,14 @@
 const { User, Group } = require("oicq");
 const { segment } = require("oicq/lib/message/elements");
 const { Client } = require("oicq");
-const { windowEmit } = require("./window");
+const { windowEmit, imgWindow } = require("./window");
 const { getTime, unescapeHtml, escapeHtml, escapeHtmlFromDom, unescapeHtmlFromDom, removeSpaces, compareChat, getRawMessage, removeNewLines, messageScroll, lazyImageLoad, lazyImageError, scrollMessageBoxToBottom } = require("./utils");
-const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromDom, getImgSrcFromSegment } = require("./image");
+const { IMG_REGEX, BASE64_REGEX, SRC_REGEX, extractUrlFromMessage, splitDomByImg, getBase64FromImg, domIsImg, getImgSrcFromDom, getImgSrcFromSegment, cacheImgSrcFromDom } = require("./image");
 const { JSDOM } = require('jsdom');
 const { updateChatListData, dbUpdateUnread, dbStoreMessage, dbReadMessage } = require("./sqlite");
 const { ipcMain } = require('electron');
 
-function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, hide = false, top = true, merge = false, jsdom) {
+function addNewMessage(doms, name = null, time = null, from_me = false, avatar_url = null, hide = false, top = true, merge = false, jsdom, send) {
 
 	let virtual = false;
 	if (!jsdom) {
@@ -115,13 +115,13 @@ function addNewMessage(doms, name = null, time = null, from_me = false, avatar_u
 	for (const msg_img of msg_container.getElementsByClassName("msg-img")) {
 		msg_img.addEventListener("error", lazyImageError);
 		msg_img.addEventListener("load", lazyImageLoad);
-		msg_img.addEventListener("click", () => window.open(msg_img.src, '_blank'));
+		msg_img.addEventListener("click", () => send('new-img-window', msg_img.src));
 	}
 	
 }
 exports.addNewMessage = addNewMessage;
 
-function insertMessage(html) {
+function insertMessage(html, send) {
 	const msg_box = document.getElementById("msg-box");
 	const original_bottom = msg_box.scrollHeight - msg_box.scrollTop;
 	msg_box.style.scrollBehavior = "unset";
@@ -132,7 +132,7 @@ function insertMessage(html) {
 		if (msg_img.getAttribute('listener') !== 'true') {
 			msg_img.addEventListener("error", lazyImageError);
 			msg_img.addEventListener("load", lazyImageLoad);
-			msg_img.addEventListener("click", () => window.open(msg_img.src, '_blank'));
+			msg_img.addEventListener("click", () => send('new-img-window', msg_img.src));
 		}
 	}
 }
@@ -170,6 +170,7 @@ Client.prototype.sendMessage = async function (html, id, group, db, chat_list) {
 		}
 	});
 	const unescaped_send_list = unescapeHtmlFromDom(send_list);
+	const cached_send_list = cacheImgSrcFromDom(send_list, this.uin);
 	const msg_callback = await user.sendMsg(unescaped_send_list);
 	const time = getTime(msg_callback.time);
 	const avatar_url = this.getAvatar();
@@ -179,13 +180,13 @@ Client.prototype.sendMessage = async function (html, id, group, db, chat_list) {
 	const chat_data = chat_list.find(item => compareChat(item, search_item));
 	const merge_msg = (chat_data.last_id === this.uin);
 	chat_data.last_id = this.uin;
-	windowEmit('set-message', send_list, name, time, true, avatar_url, undefined, undefined, merge_msg);
+	windowEmit('set-message', cached_send_list, name, time, true, avatar_url, undefined, undefined, merge_msg);
 	windowEmit('update-chat', id, name, group, time, raw_message, undefined, 0);
 	windowEmit('cache-chat', id, group);
 	updateChatListData(db, id, group, "", msg_callback.time, raw_message, name, this.uin);
 	dbUpdateUnread(db, id, group, "clear");
 	if (!group) {
-		dbStoreMessage(db, id, msg_callback.message_id, msg_callback.time, send_list, true);
+		dbStoreMessage(db, id, msg_callback.message_id, msg_callback.time, cached_send_list, true);
 	}
 }
 
@@ -304,10 +305,10 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list, sync_mo
 			last_cache_time = segments[segments.length - 1].time;
 			const name = await this.getName(id);
 			for (let i = 0; i < segments.length; i ++) {
-				const segment = segments[i];
-				const time = getTime(segment.time);
-				const doms = segment.msg;
-				const from_me = (segment.from_me === "true");
+				const item = segments[i];
+				const time = getTime(item.time);
+				const doms = item.msg;
+				const from_me = (item.from_me === "true");
 				const sender_id = (from_me) ? this.uin : id;
 				const avatar_url = this.getAvatar(sender_id);
 				const sender_name = (from_me) ? this.nickname : name;
@@ -315,8 +316,9 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list, sync_mo
 				if (!chat_data) {
 					const raw_message = getRawMessage(doms);
 					windowEmit('set-chat', id, name, time, raw_message, sender_name, false, this.getAvatar(id), 0);
+					search_item.name = name;
 					search_item.last_id = sender_id;
-					search_item.top_time = segment.time;
+					search_item.top_time = item.time;
 					search_item.seq_reserved = cache_top_time;
 					chat_list = chat_list.concat([search_item]);
 					chat_data = chat_list.find(item => compareChat(item, search_item));
@@ -324,7 +326,7 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list, sync_mo
 				merge_msg = (chat_data.last_id === sender_id);
 				if (i === 0) {
 					merge_msg = false;
-					cache_top_time = segment.time;
+					cache_top_time = item.time;
 				}
 				windowEmit('set-message', doms, sender_name, time, from_me, avatar_url, (i !== segments.length - 1), undefined, merge_msg);
 				chat_data.last_id = sender_id;
@@ -345,6 +347,7 @@ Client.prototype.syncMessage = async function (db, id, group, chat_list, sync_mo
 		const group_avatar_url = (group) ? this.getAvatar(id, true) : null;
 		if (!chat_data) {
 			windowEmit('set-chat', id, name, time, raw_message, sender_name, group, group_avatar_url ?? avatar_url, 0);
+			search_item.name = name;
 			search_item.last_id = sender_id;
 			search_item.top_time = msg.time;
 			search_item.seq_reserved = msg.time;
@@ -441,7 +444,7 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 	if (in_section) {
 		windowEmit('get-view-height');
 		ipcMain.once('is-at-up', (_e, is_at_up) => {
-			const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: (is_at_up) ? 1 : 0, last_id: sender_id};
+			const search_item = {id: group_id ?? sender_id, name: group_name ?? name, group: msg_is_group, unread: (is_at_up) ? 1 : 0, last_id: sender_id};
 			const chat_data = chat_list.find(item => compareChat(item, search_item));
 			let merge_msg = false;
 			if (!chat_data) {
@@ -470,7 +473,7 @@ Client.prototype.handleMessage = async function(e, db, current_uid, chat_list) {
 		});
 	}
 	else {
-		const search_item = {id: group_id ?? sender_id, group: msg_is_group, unread: 1, last_id: sender_id, top_time: (msg_is_group) ? e.seq : e.time, seq_reserved: (msg_is_group) ? e.seq : e.time};
+		const search_item = {id: group_id ?? sender_id, name: group_name ?? name, group: msg_is_group, unread: 1, last_id: sender_id, top_time: (msg_is_group) ? e.seq : e.time, seq_reserved: (msg_is_group) ? e.seq : e.time};
 		const chat_data = chat_list.find(item => compareChat(item, search_item));
 		if (!chat_data) {
 			windowEmit('set-chat', group_id ?? sender_id, group_name ?? name, time, e.raw_message, name, msg_is_group, group_avatar_url ?? avatar_url, 1);
@@ -497,7 +500,7 @@ Client.prototype.syncMessageFromOtherDevice = async function(e, db, current_uid,
 	const receiver_avatar_url = this.getAvatar(receiver_id);
 	const group_avatar_url = (msg_is_group) ? this.getAvatar(group_id, true) : null;
 	const in_section = (current_uid === (group_id ?? receiver_id));
-	const search_item = {id: group_id ?? receiver_id, group: msg_is_group, unread: 0, last_id: this.uin};
+	const search_item = {id: group_id ?? receiver_id, name: group_name ?? receiver_name, group: msg_is_group, unread: 0, last_id: this.uin};
 	const chat_data = chat_list.find(item => compareChat(item, search_item));
 	const merge_msg = (chat_data.last_id === this.uin);
 	windowEmit('update-chat', group_id ?? receiver_id, name, msg_is_group, time, e.raw_message, undefined, 0);
